@@ -19,23 +19,24 @@ def fuzzy_search(query: str, page: int, per_page: int):
 def browse_data(
     page,
     per_page,
+    browse_type="browse",
     transferring_body_id=None,
     series_id=None,
     consignment_id=None,
     date_range=None,
     date_filter_field=None,
 ):
-    if transferring_body_id:
+    if browse_type == "transferring_body":  # transferring_body_id:
         body = Body.query.get_or_404(transferring_body_id)
         validate_body_user_groups_or_404(body.Name)
         browse_query = _build_transferring_body_filter_query(
             transferring_body_id
         )
-    elif series_id:
+    elif browse_type == "series":  # series_id:
         series = Series.query.get_or_404(series_id)
         validate_body_user_groups_or_404(series.body_series.Name)
         browse_query = _build_series_filter_query(series_id)
-    elif consignment_id:
+    elif browse_type == "consignment":  # consignment_id:
         consignment = Consignment.query.get_or_404(consignment_id)
         validate_body_user_groups_or_404(consignment.consignment_bodies.Name)
 
@@ -47,16 +48,28 @@ def browse_data(
     else:
         browse_query = _build_browse_everything_query()
 
-    if not consignment_id and date_range:
-        dt_range = validate_date_range(date_range)
+    if not browse_type == "consignment":
+        if transferring_body_id:
+            browse_query = browse_query.filter(
+                Body.BodyId == transferring_body_id
+            )
+        if series_id:
+            browse_query = browse_query.filter(Series.SeriesId == series_id)
+        if consignment_id:
+            browse_query = browse_query.filter(
+                Consignment.ConsignmentId == consignment_id
+            )
+        if date_range:
+            dt_range = validate_date_range(date_range)
 
-        date_filter = _build_date_range_filter(
-            Consignment.TransferCompleteDatetime,
-            dt_range["date_from"],
-            dt_range["date_to"],
-        )
-        browse_query = browse_query.filter(date_filter)
+            date_filter = _build_date_range_filter(
+                Consignment.TransferCompleteDatetime,
+                dt_range["date_from"],
+                dt_range["date_to"],
+            )
+            browse_query = browse_query.filter(date_filter)
 
+    print("browse_query_after_filter :", browse_query)
     return browse_query.paginate(page=page, per_page=per_page)
 
 

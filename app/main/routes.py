@@ -19,7 +19,9 @@ from app.main import bp
 from app.main.authorize.access_token_sign_in_required import (
     access_token_sign_in_required,
 )
+from app.main.authorize.keycloak_manager import get_user_groups
 from app.main.authorize.permissions_helpers import (
+    get_user_accessible_transferring_bodies,
     validate_body_user_groups_or_404,
 )
 from app.main.db.models import File
@@ -103,11 +105,50 @@ def browse():
     page = int(request.args.get("page", 1))
     per_page = int(current_app.config["DEFAULT_PAGE_SIZE"])
 
+    user_groups = get_user_groups(session["access_token"])
+    bodies = None
+    if user_groups:
+        bodies = get_user_accessible_transferring_bodies(user_groups)
+
+    # transferring_body = request.form.get(
+    #    "browse_filter_transferring_body", ""
+    # ).lower()
+    # series = request.form.get("browse_filter_series", "").lower()
+    # consignment_ref = request.form.get(
+    #    "browse_filter_consignment-ref", ""
+    # ).lower()
+    # date_from = "{0}/{1}/{2}".format(
+    #    request.form.get("date-from-day", ""),
+    #    request.form.get("date-from-month", ""),
+    #    request.form.get("date-from-year", ""),
+    # )
+
+    # date_to = "{0}/{1}/{2}".format(
+    #    request.form.get("date-to-day", ""),
+    #    request.form.get("date-to-month", ""),
+    #    request.form.get("date-to-year", ""),
+    # )
+
     transferring_body_id = request.args.get("transferring_body_id", None)
     series_id = request.args.get("series_id", None)
     consignment_id = request.args.get("consignment_id", None)
 
     browse_type = "browse"
+    # Create a list to accumulate filter conditions
+    # filters = []
+    # if transferring_body:
+    #    filters.append({"transferring_body": transferring_body})
+    # if series:
+    #    filters.append({"series": series})
+    # if consignment_ref:
+    #    filters.append({"consignment_ref": consignment_ref})
+    # if date_from:
+    #    if date_from != "//":
+    #        filters.append({"date_from": date_from})
+    # if date_to:
+    #    if date_to != "//":
+    #        filters.append({"date_to": date_to})
+
     filters = {}
 
     if transferring_body_id:
@@ -120,7 +161,12 @@ def browse():
         browse_type = "consignment"
         filters["consignment_id"] = consignment_id
 
-    browse_results = browse_data(page=page, per_page=per_page, **filters)
+    browse_results = browse_data(
+        page=page,
+        per_page=per_page,
+        browse_type=browse_type,
+        **filters,
+    )
 
     num_records_found = browse_results.total
 
@@ -130,6 +176,7 @@ def browse():
         current_page=page,
         filters=filters,
         browse_type=browse_type,
+        transferring_bodies=bodies,
         results=browse_results,
         num_records_found=num_records_found,
     )

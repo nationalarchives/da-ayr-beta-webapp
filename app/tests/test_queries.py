@@ -5,6 +5,7 @@ import werkzeug
 from flask.testing import FlaskClient
 
 from app.main.db.queries import browse_data, fuzzy_search, get_file_metadata
+from app.tests.conftest import mock_standard_user
 from app.tests.factories import (
     ConsignmentFactory,
     FileFactory,
@@ -207,16 +208,16 @@ class TestFuzzySearch:
         assert result.has_prev is True
 
 
-class TestBrowseData:
-    def test_browse_data_without_filters(self, client: FlaskClient):
+class TestBrowse:
+    def test_browse_without_filters(self, client: FlaskClient):
         """
         Given multiple File objects in the database
-        When browse_data is called with page=2, per_page=5
+        When browse_data is called with page=2, per_page=5, browse_type='browse'
         Then it returns a Paginate object returning the first 5 items
             ordered by Body name then Series name
         """
         files = create_multiple_test_records()
-        result = browse_data(page=1, per_page=5)
+        result = browse_data(page=1, per_page=5, browse_type="browse")
 
         assert result.items == [
             (
@@ -266,16 +267,16 @@ class TestBrowseData:
             ),
         ]
 
-    def test_browse_data_get_specific_page_results(self, client: FlaskClient):
+    def test_browse_get_specific_page_results(self, client: FlaskClient):
         """
         Given multiple File objects in the database
-        When browse_data is called with page=2, per_page=5
+        When browse_data is called with page=2, per_page=5, browse_type='browse'
         Then it returns a Paginate object returning the second 5 items
             ordered by Body name then Series name
         """
         files = create_multiple_test_records()
 
-        result = browse_data(page=2, per_page=per_page)
+        result = browse_data(page=2, per_page=per_page, browse_type="browse")
         assert result.items == [
             (
                 files[3].file_consignments.consignment_bodies.BodyId,
@@ -327,7 +328,212 @@ class TestBrowseData:
         assert result.has_next is True
         assert result.has_prev is True
 
-    def test_browse_data_with_transferring_body_filter(
+    def test_browse_with_date_from_filter(self, client: FlaskClient):
+        """
+        Given multiple File objects in the database and consignment transfer complete date
+            that matches all of them
+        When browse_data is called with date_from
+        Then it returns a list containing multiple dictionary for the matching record with
+            expected fields
+        """
+        files = create_multiple_test_records()
+
+        filters = {"date_range": {"date_from": "12/02/2023"}}
+        result = browse_data(page=1, per_page=per_page, filters=filters)
+
+        assert result.items == [
+            (
+                files[4].file_consignments.consignment_bodies.BodyId,
+                "testing body5",
+                files[4].file_consignments.consignment_series.SeriesId,
+                "test series5",
+                "15/02/2023",
+                1,
+                1,
+            ),
+            (
+                files[5].file_consignments.consignment_bodies.BodyId,
+                "testing body6",
+                files[5].file_consignments.consignment_series.SeriesId,
+                "test series6",
+                "15/02/2023",
+                1,
+                1,
+            ),
+            (
+                files[6].file_consignments.consignment_bodies.BodyId,
+                "testing body7",
+                files[6].file_consignments.consignment_series.SeriesId,
+                "test series7",
+                "15/02/2023",
+                1,
+                1,
+            ),
+            (
+                files[7].file_consignments.consignment_bodies.BodyId,
+                "testing body8",
+                files[7].file_consignments.consignment_series.SeriesId,
+                "test series8",
+                "15/02/2023",
+                1,
+                1,
+            ),
+            (
+                files[8].file_consignments.consignment_bodies.BodyId,
+                "testing body9",
+                files[8].file_consignments.consignment_series.SeriesId,
+                "test series9",
+                "15/02/2023",
+                1,
+                1,
+            ),
+        ]
+
+    def test_browse_with_date_to_filter(self, client: FlaskClient):
+        """
+        Given multiple File objects in the database and consignment transfer complete date
+            that matches all of them
+        When browse_data is called with date_to
+        Then it returns a list containing multiple dictionary for the matching record with
+            expected fields
+        """
+        files = create_multiple_test_records()
+
+        filters = {"date_range": {"date_to": "28/02/2023"}}
+        result = browse_data(page=1, per_page=per_page, filters=filters)
+
+        assert result.items == [
+            (
+                files[0].file_consignments.consignment_bodies.BodyId,
+                "test body1",
+                files[0].file_consignments.consignment_series.SeriesId,
+                "test series1",
+                "01/01/2023",
+                1,
+                1,
+            ),
+            (
+                files[1].file_consignments.consignment_bodies.BodyId,
+                "test body2",
+                files[1].file_consignments.consignment_series.SeriesId,
+                "test series2",
+                "01/01/2023",
+                1,
+                1,
+            ),
+            (
+                files[9].file_consignments.consignment_bodies.BodyId,
+                "testing body10",
+                files[9].file_consignments.consignment_series.SeriesId,
+                "test series10",
+                "01/01/2023",
+                1,
+                1,
+            ),
+            (
+                files[10].file_consignments.consignment_bodies.BodyId,
+                "testing body11",
+                files[10].file_consignments.consignment_series.SeriesId,
+                "test series11",
+                "01/01/2023",
+                1,
+                2,
+            ),
+            (
+                files[2].file_consignments.consignment_bodies.BodyId,
+                "testing body3",
+                files[2].file_consignments.consignment_series.SeriesId,
+                "test series3",
+                "01/01/2023",
+                1,
+                1,
+            ),
+        ]
+
+    def test_browse_with_date_from_and_to_filter(self, client: FlaskClient):
+        """
+        Given multiple File objects in the database and consignment transfer complete date
+            that matches all of them
+        When browse_data is called with date_from and date_to
+        Then it returns a list containing multiple dictionary for the matching record with
+            date in between the range
+        """
+        files = create_multiple_test_records()
+
+        filters = {
+            "date_range": {"date_from": "01/02/2023", "date_to": "28/02/2023"}
+        }
+        result = browse_data(page=1, per_page=per_page, filters=filters)
+
+        assert result.items == [
+            (
+                files[4].file_consignments.consignment_bodies.BodyId,
+                "testing body5",
+                files[4].file_consignments.consignment_series.SeriesId,
+                "test series5",
+                "15/02/2023",
+                1,
+                1,
+            ),
+            (
+                files[5].file_consignments.consignment_bodies.BodyId,
+                "testing body6",
+                files[5].file_consignments.consignment_series.SeriesId,
+                "test series6",
+                "15/02/2023",
+                1,
+                1,
+            ),
+            (
+                files[6].file_consignments.consignment_bodies.BodyId,
+                "testing body7",
+                files[6].file_consignments.consignment_series.SeriesId,
+                "test series7",
+                "15/02/2023",
+                1,
+                1,
+            ),
+            (
+                files[7].file_consignments.consignment_bodies.BodyId,
+                "testing body8",
+                files[7].file_consignments.consignment_series.SeriesId,
+                "test series8",
+                "15/02/2023",
+                1,
+                1,
+            ),
+            (
+                files[8].file_consignments.consignment_bodies.BodyId,
+                "testing body9",
+                files[8].file_consignments.consignment_series.SeriesId,
+                "test series9",
+                "15/02/2023",
+                1,
+                1,
+            ),
+        ]
+
+    def test_browse_with_date_from_and_to_filter_no_result(
+        self, client: FlaskClient
+    ):
+        """
+        Given multiple File objects in the database and consignment transfer complete date
+            that matches all of them
+        When browse_data is called with date_from and date_to
+        Then if date range not matched it returns empty list containing multiple dictionary
+        """
+        create_multiple_test_records()
+
+        filters = {
+            "date_range": {"date_from": "01/03/2023", "date_to": "31/05/2023"}
+        }
+        result = browse_data(page=1, per_page=per_page, filters=filters)
+
+        assert result.items == []
+
+
+class TestBrowseTransferringBody:
+    def test_browse_transferring_body_with_transferring_body_filter(
         self, client: FlaskClient
     ):
         """
@@ -341,10 +547,17 @@ class TestBrowseData:
 
         file = files[0]
 
+        mock_standard_user(
+            client, file.file_consignments.consignment_bodies.Name
+        )
+
         transferring_body_id = file.file_consignments.consignment_bodies.BodyId
         series_id = file.file_consignments.consignment_series.SeriesId
         result = browse_data(
-            page=1, per_page=per_page, transferring_body_id=transferring_body_id
+            page=1,
+            per_page=per_page,
+            browse_type="transferring_body",
+            transferring_body_id=transferring_body_id,
         )
 
         assert result.items == [
@@ -359,7 +572,9 @@ class TestBrowseData:
             )
         ]
 
-    def test_browse_data_with_series_filter(self, client: FlaskClient):
+
+class TestBrowseSeries:
+    def test_browse_series_with_series_filter(self, client: FlaskClient):
         """
         Given multiple File objects in the database and a series_id
             that matches only one of them
@@ -370,12 +585,16 @@ class TestBrowseData:
         files = create_multiple_test_records()
 
         file = files[0]
-
+        mock_standard_user(
+            client, file.file_consignments.consignment_bodies.Name
+        )
         transferring_body_id = file.file_consignments.consignment_bodies.BodyId
         series_id = file.file_consignments.consignment_series.SeriesId
         consignment_id = file.file_consignments.ConsignmentId
 
-        result = browse_data(page=1, per_page=per_page, series_id=series_id)
+        result = browse_data(
+            page=1, per_page=per_page, browse_type="series", series_id=series_id
+        )
 
         assert result.items == [
             (
@@ -390,7 +609,11 @@ class TestBrowseData:
             )
         ]
 
-    def test_browse_data_with_consignment_filter(self, app):
+
+class TestBrowseConsignment:
+    def test_browse_consignment_with_consignment_filter(
+        self, app, client: FlaskClient
+    ):
         """
         Given three file objects with associated metadata part of 1 consignment,
             where 2 file types is 'file', another file 'folder', and another file of
@@ -445,9 +668,12 @@ class TestBrowseData:
         FileFactory(file_consignments=consignment, FileType="folder")
 
         FileFactory(FileType="file")
-
+        mock_standard_user(client, file_1)
         pagination_object = browse_data(
-            page=1, per_page=per_page, consignment_id=consignment.ConsignmentId
+            page=1,
+            per_page=per_page,
+            browse_type="consignment",
+            consignment_id=consignment.ConsignmentId,
         )
 
         assert pagination_object.total == 2
@@ -475,7 +701,9 @@ class TestBrowseData:
 
         assert results == expected_results
 
-    def test_browse_data_with_consignment_and_date_from_filter(self, app):
+    def test_browse_consignment_with_consignment_and_date_from_filter(
+        self, app, client: FlaskClient
+    ):
         """
         Given three file objects with associated metadata part of 1 consignment,
             where 2 file types is 'file', another file 'folder', and another file of
@@ -534,13 +762,15 @@ class TestBrowseData:
 
         FileFactory(FileType="file")
 
-        date_range = {"date_from": "25/02/2023"}
+        filters = {
+            "date_range": {"date_from": "25/02/2023"},
+            "date_filter_field": "date_last_modified",
+        }
         pagination_object = browse_data(
             page=1,
             per_page=per_page,
             consignment_id=consignment.ConsignmentId,
-            date_range=date_range,
-            date_filter_field="date_last_modified",
+            filters=filters,
         )
 
         assert pagination_object.total == 2
@@ -568,7 +798,7 @@ class TestBrowseData:
 
         assert results == expected_results
 
-    def test_browse_data_with_consignment_and_date_to_filter(self, app):
+    def test_browse_consignment_with_consignment_and_date_to_filter(self, app):
         """
         Given three file objects with associated metadata part of 1 consignment,
             where 2 file types is 'file', another file 'folder', and another file of
@@ -627,13 +857,15 @@ class TestBrowseData:
 
         FileFactory(FileType="file")
 
-        date_range = {"date_to": "26/02/2023"}
+        filters = {
+            "date_range": {"date_to": "26/02/2023"},
+            "date_filter_field": "date_last_modified",
+        }
         pagination_object = browse_data(
             page=1,
             per_page=per_page,
             consignment_id=consignment.ConsignmentId,
-            date_range=date_range,
-            date_filter_field="date_last_modified",
+            filters=filters,
         )
 
         assert pagination_object.total == 1
@@ -653,7 +885,7 @@ class TestBrowseData:
 
         assert results == expected_results
 
-    def test_browse_data_with_consignment_and_date_from_and_to_filter(
+    def test_browse_consignment_with_consignment_and_date_from_and_to_filter(
         self, app
     ):
         """
@@ -715,13 +947,15 @@ class TestBrowseData:
 
         FileFactory(FileType="file")
 
-        date_range = {"date_from": "01/02/2023", "date_to": "28/02/2023"}
+        filters = {
+            "date_range": {"date_from": "01/02/2023", "date_to": "28/02/2023"},
+            "date_filter_field": "date_last_modified",
+        }
         pagination_object = browse_data(
             page=1,
             per_page=per_page,
             consignment_id=consignment.ConsignmentId,
-            date_range=date_range,
-            date_filter_field="date_last_modified",
+            filters=filters,
         )
 
         assert pagination_object.total == 2
@@ -748,207 +982,6 @@ class TestBrowseData:
         results = pagination_object.items
 
         assert results == expected_results
-
-    def test_browse_data_with_date_from_filter(self, client: FlaskClient):
-        """
-        Given multiple File objects in the database and consignment transfer complete date
-            that matches all of them
-        When browse_data is called with date_from
-        Then it returns a list containing multiple dictionary for the matching record with
-            expected fields
-        """
-        files = create_multiple_test_records()
-
-        date_range = {"date_from": "12/02/2023"}
-        result = browse_data(page=1, per_page=per_page, date_range=date_range)
-
-        assert result.items == [
-            (
-                files[4].file_consignments.consignment_bodies.BodyId,
-                "testing body5",
-                files[4].file_consignments.consignment_series.SeriesId,
-                "test series5",
-                "15/02/2023",
-                1,
-                1,
-            ),
-            (
-                files[5].file_consignments.consignment_bodies.BodyId,
-                "testing body6",
-                files[5].file_consignments.consignment_series.SeriesId,
-                "test series6",
-                "15/02/2023",
-                1,
-                1,
-            ),
-            (
-                files[6].file_consignments.consignment_bodies.BodyId,
-                "testing body7",
-                files[6].file_consignments.consignment_series.SeriesId,
-                "test series7",
-                "15/02/2023",
-                1,
-                1,
-            ),
-            (
-                files[7].file_consignments.consignment_bodies.BodyId,
-                "testing body8",
-                files[7].file_consignments.consignment_series.SeriesId,
-                "test series8",
-                "15/02/2023",
-                1,
-                1,
-            ),
-            (
-                files[8].file_consignments.consignment_bodies.BodyId,
-                "testing body9",
-                files[8].file_consignments.consignment_series.SeriesId,
-                "test series9",
-                "15/02/2023",
-                1,
-                1,
-            ),
-        ]
-
-    def test_browse_data_with_date_to_filter(self, client: FlaskClient):
-        """
-        Given multiple File objects in the database and consignment transfer complete date
-            that matches all of them
-        When browse_data is called with date_to
-        Then it returns a list containing multiple dictionary for the matching record with
-            expected fields
-        """
-        files = create_multiple_test_records()
-
-        date_range = {"date_to": "28/02/2023"}
-        result = browse_data(page=1, per_page=per_page, date_range=date_range)
-
-        assert result.items == [
-            (
-                files[0].file_consignments.consignment_bodies.BodyId,
-                "test body1",
-                files[0].file_consignments.consignment_series.SeriesId,
-                "test series1",
-                "01/01/2023",
-                1,
-                1,
-            ),
-            (
-                files[1].file_consignments.consignment_bodies.BodyId,
-                "test body2",
-                files[1].file_consignments.consignment_series.SeriesId,
-                "test series2",
-                "01/01/2023",
-                1,
-                1,
-            ),
-            (
-                files[9].file_consignments.consignment_bodies.BodyId,
-                "testing body10",
-                files[9].file_consignments.consignment_series.SeriesId,
-                "test series10",
-                "01/01/2023",
-                1,
-                1,
-            ),
-            (
-                files[10].file_consignments.consignment_bodies.BodyId,
-                "testing body11",
-                files[10].file_consignments.consignment_series.SeriesId,
-                "test series11",
-                "01/01/2023",
-                1,
-                2,
-            ),
-            (
-                files[2].file_consignments.consignment_bodies.BodyId,
-                "testing body3",
-                files[2].file_consignments.consignment_series.SeriesId,
-                "test series3",
-                "01/01/2023",
-                1,
-                1,
-            ),
-        ]
-
-    def test_browse_data_with_date_from_and_to_filter(
-        self, client: FlaskClient
-    ):
-        """
-        Given multiple File objects in the database and consignment transfer complete date
-            that matches all of them
-        When browse_data is called with date_from and date_to
-        Then it returns a list containing multiple dictionary for the matching record with
-            date in between the range
-        """
-        files = create_multiple_test_records()
-
-        date_range = {"date_from": "01/02/2023", "date_to": "28/02/2023"}
-        result = browse_data(page=1, per_page=per_page, date_range=date_range)
-
-        assert result.items == [
-            (
-                files[4].file_consignments.consignment_bodies.BodyId,
-                "testing body5",
-                files[4].file_consignments.consignment_series.SeriesId,
-                "test series5",
-                "15/02/2023",
-                1,
-                1,
-            ),
-            (
-                files[5].file_consignments.consignment_bodies.BodyId,
-                "testing body6",
-                files[5].file_consignments.consignment_series.SeriesId,
-                "test series6",
-                "15/02/2023",
-                1,
-                1,
-            ),
-            (
-                files[6].file_consignments.consignment_bodies.BodyId,
-                "testing body7",
-                files[6].file_consignments.consignment_series.SeriesId,
-                "test series7",
-                "15/02/2023",
-                1,
-                1,
-            ),
-            (
-                files[7].file_consignments.consignment_bodies.BodyId,
-                "testing body8",
-                files[7].file_consignments.consignment_series.SeriesId,
-                "test series8",
-                "15/02/2023",
-                1,
-                1,
-            ),
-            (
-                files[8].file_consignments.consignment_bodies.BodyId,
-                "testing body9",
-                files[8].file_consignments.consignment_series.SeriesId,
-                "test series9",
-                "15/02/2023",
-                1,
-                1,
-            ),
-        ]
-
-    def test_browse_data_with_date_from_and_to_filter_no_result(
-        self, client: FlaskClient
-    ):
-        """
-        Given multiple File objects in the database and consignment transfer complete date
-            that matches all of them
-        When browse_data is called with date_from and date_to
-        Then if date range not matched it returns empty list containing multiple dictionary
-        """
-        create_multiple_test_records()
-
-        date_range = {"date_from": "01/03/2023", "date_to": "31/05/2023"}
-        result = browse_data(page=1, per_page=per_page, date_range=date_range)
-
-        assert result.items == []
 
 
 class TestGetFileMetadata:

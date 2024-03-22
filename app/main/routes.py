@@ -621,13 +621,13 @@ def record(record_id: uuid.UUID):
         key = f"{file.consignment.ConsignmentReference}/{file.FileId}"
         download_file_name = file.CiteableReference or file.FileName
         file_data = download_file_from_s3_bucket(key)
-        file_data = send_file(
+        download_status = "success"
+
+        response = send_file(
             file_data, as_attachment=True, download_name=download_file_name
         )
-        download_status = "success"
-        # return response
-    else:
-        file_data = None
+        flash("download successfully")
+        return response
 
     return render_template(
         "record.html",
@@ -636,7 +636,6 @@ def record(record_id: uuid.UUID):
         breadcrumb_values=breadcrumb_values,
         download_status=download_status,
         filters={},
-        file_data=file_data,
     )
 
 
@@ -725,7 +724,6 @@ def download_record(record_id: uuid.UUID):
 
     try:
         s3_file_object = s3.get_object(Bucket=bucket, Key=key)
-
         response = Response(
             s3_file_object["Body"].read(),
             headers={

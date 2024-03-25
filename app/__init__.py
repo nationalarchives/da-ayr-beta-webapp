@@ -1,7 +1,5 @@
 from flask import Flask, g
 from flask_compress import Compress
-from flask_limiter import Limiter
-from flask_limiter.util import get_remote_address
 from flask_talisman import Talisman
 from govuk_frontend_wtf.main import WTFormsHelpers
 from jinja2 import ChoiceLoader, PackageLoader, PrefixLoader
@@ -10,9 +8,6 @@ from app.logger_config import setup_logging
 from app.main.db.models import db
 
 compress = Compress()
-limiter = Limiter(
-    get_remote_address, default_limits=["2 per second", "60 per minute"]
-)
 talisman = Talisman()
 
 
@@ -61,7 +56,6 @@ def create_app(config_class, database_uri=None):
     setup_logging(app)
     db.init_app(app)
     compress.init_app(app)
-    limiter.init_app(app)
     talisman.init_app(app, content_security_policy=csp, force_https=force_https)
     WTFormsHelpers(app)
 

@@ -616,18 +616,20 @@ def record(record_id: uuid.UUID):
         6: {"file_name": file.FileName},
     }
 
-    if download_file:
-        print("i should be here")
+    if download_file:  # request.method == 'POST':
         key = f"{file.consignment.ConsignmentReference}/{file.FileId}"
         download_file_name = file.CiteableReference or file.FileName
         file_data = download_file_from_s3_bucket(key)
         download_status = "success"
-
         response = send_file(
             file_data, as_attachment=True, download_name=download_file_name
         )
-        flash("download successfully")
+        # with open(download_file_name, 'w') as f:
+        #     f.write(str(file_data))
+        # flash("Download Successfully ", "success")
         return response
+    else:
+        file_data = None
 
     return render_template(
         "record.html",
@@ -635,6 +637,7 @@ def record(record_id: uuid.UUID):
         record=file_metadata,
         breadcrumb_values=breadcrumb_values,
         download_status=download_status,
+        download_data=file_data,
         filters={},
     )
 
@@ -728,9 +731,10 @@ def download_record(record_id: uuid.UUID):
             s3_file_object["Body"].read(),
             headers={
                 "Content-Disposition": "attachment;filename="
-                + download_file_name
+                + download_file_name,
             },
         )
+        breakpoint()
         return response
     except Exception as e:
         print(e)

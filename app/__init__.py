@@ -51,8 +51,7 @@ def create_app(config_class, database_uri=None):
 
     # Set content security policy
     csp = {
-        "default-src": "'self'",
-        "script-src": ["'self'"],
+        "default-src": f"'self' {app.config['FLASKS3_CDN_DOMAIN']}",
     }
 
     # setup database uri for testing

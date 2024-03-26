@@ -955,6 +955,22 @@ mongodb = ["limits[mongodb]"]
 redis = ["limits[redis]"]
 
 [[package]]
+name = "flask-s3"
+version = "0.3.3"
+description = "Seamlessly serve the static files of your Flask app from Amazon S3"
+optional = false
+python-versions = "*"
+files = [
+    {file = "Flask-S3-0.3.3.tar.gz", hash = "sha256:1d49061d4b78759df763358a901f4ed32bb43f672c9f8e1ec7226793f6ae0fd2"},
+    {file = "Flask_S3-0.3.3-py3-none-any.whl", hash = "sha256:23cbbb1db4c29c313455dbe16f25be078d6318f0a11abcbb610f99e116945b62"},
+]
+
+[package.dependencies]
+Boto3 = ">=1.1.1"
+Flask = "*"
+six = "*"
+
+[[package]]
 name = "flask-sqlalchemy"
 version = "3.1.1"
 description = "Add SQLAlchemy support to your Flask application."
@@ -3018,4 +3034,4 @@ wheel = "*"
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.11"
-content-hash = "a4b35066629d238c7dc0eca5ccc3d8121923c4126ec2a03dbdef45b0adaf9832"
+content-hash = "f1e8a1e6681d721eed6bf381d7b8cd96fb85df5118af7abfe3052d40afb74b5b"

@@ -48,12 +48,48 @@ def create_app(config_class, database_uri=None):
         ]
     )
 
-    # Set content security policy
+    SELF = "'self'"
+
     csp = {
-        "default-src": f"'self' {app.config['FLASKS3_CDN_DOMAIN']}",
-        "script-src": f"'self' {app.config['FLASKS3_CDN_DOMAIN']}"
-        + " 'sha256-GUQ5ad8JK5KmEWmROf3LZd9ge94daqNvd8xy9YS1iDw='"  # pragma: allowlist secret
-        + " 'sha256-l1eTVSK8DTnK8+yloud7wZUqFrI0atVo6VlC6PJvYaQ='",  # pragma: allowlist secret
+        "default-src": f"'self' {app.config['FLASKS3_CDN_DOMAIN']} https://cdn.jsdelivr.net 'unsafe-inline' ",
+        "script-src": (
+            [
+                SELF,
+                "'unsafe-eval'",
+                f"{app.config['FLASKS3_CDN_DOMAIN']}",
+                "https://cdn.jsdelivr.net",
+                "https://cdnjs.cloudflare.com",
+                "https://cdn.jsdelivr.net/npm/universalviewer@4.0.25/dist/umd/4864.b0b319b4f29542847e0e.js",
+                "'sha256-GUQ5ad8JK5KmEWmROf3LZd9ge94daqNvd8xy9YS1iDw='",  # pragma: allowlist secret
+                "'sha256-l1eTVSK8DTnK8+yloud7wZUqFrI0atVo6VlC6PJvYaQ='",  # pragma: allowlist secret
+            ]
+        ),
+        "style-src": [
+            SELF,
+            "https://cdn.jsdelivr.net",
+            "https://cdnjs.cloudflare.com",
+            "'unsafe-hashes'",
+            "'sha256-aqNNdDLnnrDOnTNdkJpYlAxKVJtLt9CtFLklmInuUAE='",  # pragma: allowlist secret
+            "'sha256-8Vn73Z5msbLVngI0nj0OnoRknDpixmr5Qqxqq1oVeyw='",  # pragma: allowlist secret
+            "'sha256-47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU='",  # pragma: allowlist secret
+            "'sha256-s6M/FyyCCegtJyBnH26lkxb67XZxuZKosiCQWD+VaSo='",  # pragma: allowlist secret
+            "'sha256-gNGYzcxL9BKlQFzUxh3BgvhKn2szEIFgg65uQvfaxiI='",  # pragma: allowlist secret
+            "'sha256-jcxDeNpsDPUI+dIIqUyA3VBoLgf3Mi2LkRWL/H61who='",  # pragma: allowlist secret
+            "'sha256-1u1O/sNzLBXqLGKzuRbVTI5abqBQBfKsNv3bH5iXOkg='",  # pragma: allowlist secret
+            "'sha256-xDT4BUH+7vjNzOH1DSYRS8mdxJbvLVPYsb8hjk4Yccg='",  # pragma: allowlist secret
+        ],
+        "worker-src": [
+            "blob:",
+            SELF,
+            f"{app.config['FLASKS3_CDN_DOMAIN']}",
+            "https://cdn.jsdelivr.net",
+            "https://cdnjs.cloudflare.com",
+            "'sha256-GUQ5ad8JK5KmEWmROf3LZd9ge94daqNvd8xy9YS1iDw='",  # pragma: allowlist secret
+            "'sha256-l1eTVSK8DTnK8+yloud7wZUqFrI0atVo6VlC6PJvYaQ='",  # pragma: allowlist secret
+        ],
+        "img-src": (
+            f"'self' {app.config['FLASKS3_CDN_DOMAIN']} https://cdn.jsdelivr.net data: 'unsafe-inline' "
+        ),
     }
 
     # setup database uri for testing
@@ -65,7 +101,16 @@ def create_app(config_class, database_uri=None):
     db.init_app(app)
     s3.init_app(app)
     compress.init_app(app)
-    talisman.init_app(app, content_security_policy=csp, force_https=force_https)
+    talisman.init_app(
+        app,
+        content_security_policy=csp,
+        force_https=force_https,
+        content_security_policy_nonce_in=[
+            "script-src",
+            "style-src",
+            "image-src",
+        ],
+    )
     WTFormsHelpers(app)
 
     # setup database components

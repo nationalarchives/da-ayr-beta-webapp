@@ -9,6 +9,15 @@ def decompose_desktop_invisible_elements(soup):
         invisible_element.decompose()
 
 
+def decompose_inner_tables(soup):
+    """
+    this function removes tables with the id 'inner-table' from a BeautifulSoup object
+    :param soup: BeautifulSoup
+    """
+    for element in soup.find_all(attrs={"id": "inner-table"}):
+        element.decompose()
+
+
 def decompose_mobile_invisible_elements(soup):
     """
     this function removes html elements with class 'govuk-table--invisible-on-mobile' from a BeautifulSoup object
@@ -20,23 +29,22 @@ def decompose_mobile_invisible_elements(soup):
         invisible_element.decompose()
 
 
-def evaluate_table_body_rows(soup, expected_results):
+def get_table_rows_cell_values(table):
     """
-    Gets all rows and cell values for a table inside a page after decomposing invisible items then asserts the result
-    :param soup: BeautifulSoup
-    :param espected_results: string[][]
+    Returns all rows and cell values for a table that has been found using BeautifulSoup
+    :param table: BeautifulSoup object
+    Returns:
+    string[][], e.g. [["row_1_value_1", "row_1_value_2"], ["row_2_value_1", "row_2_value_2"]]
     """
-    decompose_desktop_invisible_elements(soup)
-    table_body = soup.find("tbody")
-    rows = table_body.find_all("tr")
-
+    rows = table.find_all("tr")
     data = []
-
     for row in rows:
         row_data = []
         cells = row.find_all("td")
         for cell in cells:
-            row_data.append(cell.get_text(strip=True))
-        data.append(row_data)
-
-    return data == expected_results
+            cell_value = cell.get_text(strip=True)
+            if len(cell_value) > 1:
+                row_data.append(cell.get_text(strip=True))
+        if len(row_data) > 1:
+            data.append(row_data)
+    return data

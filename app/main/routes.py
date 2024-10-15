@@ -600,6 +600,8 @@ def search_transferring_body(_id: uuid.UUID):
         or request.args.get("query", "").strip()
     )
 
+    open_all = request.args.get("open_all", False)
+
     search_filter = request.args.get("search_filter")
     if search_filter:
         search_filter = search_filter.strip()
@@ -669,7 +671,14 @@ def search_transferring_body(_id: uuid.UUID):
                         }
                     ],
                     "filter": [{"term": {"transferring_body_id.keyword": _id}}],
-                }
+                },
+            },
+            "highlight": {
+                "pre_tags": ["<mark>"],
+                "post_tags": ["</mark>"],
+                "fields": {
+                    "*": {},
+                },
             },
             "sort": sorting_query,
         }
@@ -711,6 +720,7 @@ def search_transferring_body(_id: uuid.UUID):
         sorting_orders=sorting_orders,
         search_terms=search_terms,
         pagination=pagination,
+        open_all=open_all,
         query_string_parameters={
             k: v for k, v in request.args.items() if k not in "page"
         },

@@ -19,6 +19,10 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import declarative_base, relationship, sessionmaker
 
+from data_management.opensearch_indexer.opensearch_indexer.text_extraction import (
+    TextExtractionStatus,
+)
+
 Base = declarative_base()
 
 
@@ -195,6 +199,6 @@ def test_index_file_content_and_metadata_in_opensearch(
             "Key1": "Value1",
             "Key2": "Value2",
             "content": "Text stream",
-            "text_extraction_status": "success",
+            "text_extraction_status": TextExtractionStatus.SUCCEEDED.value,
         },
     )

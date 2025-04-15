@@ -157,7 +157,6 @@ def construct_documents(files: List[Dict], bucket_name: str) -> List[Dict]:
     documents_to_index = []
     for file in files:
         object_key = f"{file['consignment_reference']}/{str(file['file_id'])}"
-
         logger.info(f"Processing file: {object_key}")
 
         try:

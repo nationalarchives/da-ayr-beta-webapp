@@ -55,6 +55,7 @@ def test_lambda_handler_invokes_bulk_index_with_correct_file_data(
     monkeypatch.setenv("AWS_ACCESS_KEY_ID", "test_access_key")
     monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "test_secret_key")
     monkeypatch.setenv("AWS_SESSION_TOKEN", "test_token")
+    monkeypatch.setenv("AWS_DEFAULT_REGION", "eu-west-2")
 
     bucket_name = "test_bucket"
 
@@ -73,11 +74,11 @@ def test_lambda_handler_invokes_bulk_index_with_correct_file_data(
 
     db_secret_string = json.dumps(
         {
-            "username": "postgres",
-            "password": "",
+            "username": "testuser",
+            "password": "testPass123",  # pragma: allowlist secret
             "proxy": "127.0.0.1",
             "port": database.settings["port"],
-            "dbname": "test",
+            "dbname": "testdb",
         }
     )
 
@@ -103,6 +104,7 @@ def test_lambda_handler_invokes_bulk_index_with_correct_file_data(
     file_1_id = uuid4()
     file_2_id = uuid4()
     file_3_id = uuid4()
+    file_4_id = uuid4()
 
     session.add_all(
         [
@@ -126,6 +128,15 @@ def test_lambda_handler_invokes_bulk_index_with_correct_file_data(
             ),
             File(
                 FileId=file_3_id,
+                FileType="File",
+                FileName="test-document.txt",
+                FileReference="file-123",
+                FilePath="/path/to/file",
+                CiteableReference="cite-ref-123",
+                ConsignmentId=consignment_id,
+            ),
+            File(
+                FileId=file_4_id,
                 FileType="File",
                 FileName="test-document.txt",
                 FileReference="file-123",
@@ -177,7 +188,7 @@ def test_lambda_handler_invokes_bulk_index_with_correct_file_data(
             ),
             FileMetadata(
                 MetadataId=uuid4(),
-                FileId=file_3_id,
+                FileId=file_4_id,
                 PropertyName="Key6",
                 Value="Value6",
             ),
@@ -188,6 +199,7 @@ def test_lambda_handler_invokes_bulk_index_with_correct_file_data(
     object_key_1 = f"{consignment_reference}/{file_1_id}"
     object_key_2 = f"{consignment_reference}/{file_2_id}"
     object_key_3 = f"{consignment_reference}/{file_3_id}"
+    object_key_4 = f"{consignment_reference}/{file_4_id}"
 
     s3_client.create_bucket(Bucket=bucket_name)
 
@@ -199,6 +211,9 @@ def test_lambda_handler_invokes_bulk_index_with_correct_file_data(
         Bucket=bucket_name,
         Key=object_key_3,
         Body=b"File content but in file we do not support text extraction for",
+    )
+    s3_client.put_object(
+        Bucket=bucket_name, Key=object_key_4, Body=b"Test file content"
     )
 
     sns_message = {
@@ -286,11 +301,30 @@ def test_lambda_handler_invokes_bulk_index_with_correct_file_data(
                     "transferring_body_id": str(body_id),
                     "transferring_body_description": "transferring body description",
                     "Key5": "Value5",
-                    "Key6": "Value6",
                     "content": "File content but in file we do not support text extraction for",
                     "text_extraction_status": TextExtractionStatus.SUCCEEDED.value,
                 },
                 "file_id": str(file_3_id),
+            },
+            {
+                "document": {
+                    "file_id": str(file_4_id),
+                    "file_name": "test-document.txt",
+                    "file_reference": "file-123",
+                    "file_path": "/path/to/file",
+                    "citeable_reference": "cite-ref-123",
+                    "series_id": str(series_id),
+                    "series_name": "series-name",
+                    "consignment_id": str(consignment_id),
+                    "consignment_reference": "TDR-2024-ABCD",
+                    "transferring_body": "body-name",
+                    "transferring_body_id": str(body_id),
+                    "transferring_body_description": "transferring body description",
+                    "Key6": "Value6",
+                    "content": "Test file content",
+                    "text_extraction_status": TextExtractionStatus.SUCCEEDED.value,
+                },
+                "file_id": str(file_4_id),
             },
         ]
         assert args[1] == "https://test-opensearch.com"

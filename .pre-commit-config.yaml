@@ -53,7 +53,7 @@ repos:
 -   repo: local
     hooks:
     -   id: safety-check
-        name: Safety Check
+        name: Pip Audit Check
         entry: custom_hooks/safety_check.sh
         language: system
         pass_filenames: false

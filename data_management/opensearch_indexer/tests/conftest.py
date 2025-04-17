@@ -90,6 +90,7 @@ def temp_db():
 def database(request):
     # Launch new PostgreSQL server
     postgresql = PostgresqlFactory(cache_initialized_db=True)()
+
     yield postgresql
 
     # PostgreSQL server is terminated here

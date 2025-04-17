@@ -1,0 +1,53 @@
+services:
+  opensearch_indexer_tests:
+    build:
+      context: ./data_management/opensearch_indexer
+      dockerfile: Dockerfile
+    volumes:
+      - .:/app
+    working_dir: /app
+    entrypoint: ""
+    command:
+    - sh
+    - -c
+    - |
+      set -e
+
+      apt-get update
+      apt-get install -y postgresql postgresql-client postgresql-contrib
+
+      echo 'Installing Python test dependencies...'
+      pip install -r data_management/opensearch_indexer/requirements-dev.txt
+
+      echo 'Creating testuser...'
+      if ! id -u testuser > /dev/null 2>&1; then
+        echo "Creating system user testuser..."
+        useradd testuser
+        # Add any other setup for the user if needed
+      else
+          echo "System user testuser already exists."
+      fi
+
+      echo 'Granting write permissions to testuser...'
+      chown -R testuser:testuser /app
+      chmod -R u+w /app
+
+      echo 'Running tests...'
+      su testuser -c "pytest \
+        --cov=data_management/opensearch_indexer/opensearch_indexer \
+        --cov-report term-missing \
+        -vvs data_management/opensearch_indexer/tests"
+
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: testuser
+      POSTGRES_PASSWORD: testPass123 # pragma: allowlist secret
+      POSTGRES_DB: testdb
+    ports:
+      - "55432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:

@@ -508,14 +508,20 @@ def test_fetch_files_in_consignment_invalid_column_with_logging(
     # Create the engine and session
     engine = create_engine(database_url)
 
-    # Minimal setup, omitting necessary schema parts
+    with engine.connect() as connection:
+        connection.execute(text('DROP TABLE IF EXISTS "FileMetadata" CASCADE'))
+        connection.execute(text('DROP TABLE IF EXISTS "File" CASCADE'))
+        connection.execute(text('DROP TABLE IF EXISTS "Consignment" CASCADE'))
+        connection.execute(text('DROP TABLE IF EXISTS "Series" CASCADE'))
+        connection.execute(text('DROP TABLE IF EXISTS "Body" CASCADE'))
+
     with engine.connect() as connection:
         connection.execute(
             text(
                 """
-            CREATE TABLE Consignment (
-                ConsignmentId SERIAL PRIMARY KEY,
-                ConsignmentReference TEXT
+            CREATE TABLE "Consignment" (
+                "ConsignmentId" SERIAL PRIMARY KEY,
+                "ConsignmentReference" TEXT
             );
         """
             )
@@ -598,7 +604,7 @@ def test_bulk_index_consignment_error_handling(
     series_id = uuid4()
     consignment_id = uuid4()
 
-    consignment_reference = "TDR-2024-ABCD"
+    consignment_reference = "TDR-2024-XYWZ"
 
     file_id = uuid4()
 
@@ -648,7 +654,7 @@ def test_bulk_index_consignment_error_handling(
     with pytest.raises(
         ConsignmentBulkIndexError,
         match=(
-            "Bulk indexing failed for consignment TDR-2024-ABCD:\n"
+            "Bulk indexing failed for consignment TDR-2024-XYWZ:\n"
             "Bulk Index Errors:\nSome opensearch bulk indexing error string."
         ),
     ):

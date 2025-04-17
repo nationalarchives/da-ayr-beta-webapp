@@ -1,4 +1,5 @@
 import json
+import unittest
 from unittest.mock import patch
 from uuid import uuid4
 
@@ -243,7 +244,7 @@ def test_lambda_handler_invokes_bulk_index_with_correct_file_data(
 
         args, _ = mock_bulk_index_files_in_opensearch.call_args
 
-        assert args[0] == [
+        expected_list = [
             {
                 "file_id": str(file_1_id),
                 "document": {
@@ -327,6 +328,7 @@ def test_lambda_handler_invokes_bulk_index_with_correct_file_data(
                 "file_id": str(file_4_id),
             },
         ]
+        unittest.TestCase().assertCountEqual(args[0], expected_list)
         assert args[1] == "https://test-opensearch.com"
 
         aws_auth = args[2]

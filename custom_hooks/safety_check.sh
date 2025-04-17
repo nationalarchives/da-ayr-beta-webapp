@@ -7,10 +7,11 @@ if ! command -v poetry &> /dev/null; then
     curl -sSL https://install.python-poetry.org | python -
 fi
 
-# Install safety if not installed
-if ! command -v safety &> /dev/null; then
-    echo "Safety is not installed. Installing..."
-    pip install safety
+# Install pip-audit if not installed
+if ! command -v pip-audit &> /dev/null; then
+    echo "Pip-audit is not installed. Installing..."
+    pip install pip-audit
 fi
-# The --ignore flag was added here because the vulnerability with ID 70612 as reported by Safety CLI exists for all the latest versions of Jinja, it can be removed once fixed
-poetry export --without-hashes -f requirements.txt | safety check --full-report --stdin --ignore=70612
+
+# Export requirements and run pip-audit
+poetry export --format requirements.txt > requirements-temp.txt && pip-audit --requirement requirements-temp.txt && rm requirements-temp.txt

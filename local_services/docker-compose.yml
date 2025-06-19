@@ -98,6 +98,7 @@ services:
       - ./webapp_postgres_certs/postgres_localhost.crt:/var/lib/postgresql/postgres_localhost.crt
       - ./webapp_postgres_certs/postgres_localhost.key:/var/lib/postgresql/postgres_localhost.key
       - ./webapp_postgres_certs/root-ca.pem:/var/lib/postgresql/root-ca.pem
+      - ./pg_hba.conf:/var/lib/postgresql/data/pg_hba.conf
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -111,6 +112,8 @@ services:
       "-c", "ssl_key_file=/var/lib/postgresql/postgres_localhost.key",
       "-c", "ssl_ca_file=/var/lib/postgresql/root-ca.pem"
     ]
+    networks:
+      - keycloak_network
 
   keycloak:
     image: quay.io/keycloak/keycloak:26.2.5
@@ -118,10 +121,10 @@ services:
     environment:
       KC_HOSTNAME: localhost
       KC_HOSTNAME_PORT: 8080
-      KC_HOSTNAME_STRICT_BACKCHANNEL: false
-      KC_HTTP_ENABLED: true
-      KC_HOSTNAME_STRICT_HTTPS: false
-      KC_HEALTH_ENABLED: true
+      KC_HOSTNAME_STRICT_BACKCHANNEL: "false"
+      KC_HTTP_ENABLED: "true"
+      KC_HOSTNAME_STRICT_HTTPS: "false"
+      KC_HEALTH_ENABLED: "true"
       KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN}
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
       KC_DB: postgres
@@ -149,6 +152,7 @@ services:
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
     volumes:
       - ~/minio/data:/data
+      - ~/minio/certs:/root/.minio/certs
     command: server /data --console-address ":9001"
 
 

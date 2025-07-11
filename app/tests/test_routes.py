@@ -10,7 +10,6 @@ from flask.testing import FlaskClient
 from moto import mock_aws
 from PIL import Image
 
-from app.tests.factories import FileFactory
 from configs.base_config import UNIVERSAL_VIEWER_SUPPORTED_IMAGE_TYPES
 
 
@@ -126,12 +125,7 @@ class TestRoutes:
         )
 
         mock_all_access_user(client)
-        file_id = "efb1b3b4-0b3b-4b3b-8b3b-0b3b4b3b4b3b"
-        file = FileFactory(
-            FileId=file_id,
-            FileType="File",
-            FileName="open_file_once_closed.pdf",
-        )
+        file = record_files[1]["file_object"]
         bucket_name = "test_bucket"
         app.config["RECORD_BUCKET_NAME"] = bucket_name
         create_mock_s3_bucket_with_object(bucket_name, file)
@@ -142,25 +136,25 @@ class TestRoutes:
         expected_pdf_manifest = {
             "@context": ["https://iiif.io/api/presentation/3/context.json"],
             "behavior": ["individuals"],
-            "description": "Manifest for open_file_once_closed.pdf",
-            "id": "http://localhost/record/efb1b3b4-0b3b-4b3b-8b3b-0b3b4b3b4b3b/manifest",
+            "description": f"Manifest for {file.FileName}",
+            "id": f"http://localhost/record/{file.FileId}/manifest",
             "items": [
                 {
-                    "id": "http://localhost/record/efb1b3b4-0b3b-4b3b-8b3b-0b3b4b3b4b3b/manifest",
+                    "id": f"http://localhost/record/{file.FileId}/manifest",
                     "items": [
                         {
-                            "id": "https://presigned-url.com/download.pdf",
+                            "id": f"https://presigned-url.com/download.{file.ffid_metadata.Extension}",
                             "items": [
                                 {
                                     "body": {
-                                        "format": "application/pdf",
-                                        "id": "https://presigned-url.com/download.pdf",
+                                        "format": f"application/{file.ffid_metadata.Extension}",
+                                        "id": f"https://presigned-url.com/download.{file.ffid_metadata.Extension}",
                                         "type": "Text",
                                     },
-                                    "id": "https://presigned-url.com/download.pdf",
+                                    "id": f"https://presigned-url.com/download.{file.ffid_metadata.Extension}",
                                     "label": {"en": ["test"]},
                                     "motivation": "painting",
-                                    "target": "https://presigned-url.com/download.pdf",
+                                    "target": f"https://presigned-url.com/download.{file.ffid_metadata.Extension}",
                                     "type": "Annotation",
                                 }
                             ],
@@ -172,17 +166,16 @@ class TestRoutes:
                     "type": "Canvas",
                 }
             ],
-            "label": {"en": ["open_file_once_closed.pdf"]},
+            "label": {"en": [f"{file.FileName}"]},
             "requiredStatement": {
                 "label": {"en": ["File name"]},
-                "value": {"en": ["open_file_once_closed.pdf"]},
+                "value": {"en": [f"{file.FileName}"]},
             },
             "type": "Manifest",
             "viewingDirection": "left-to-right",
         }
 
         actual_manifest = json.loads(response.text)
-
         assert response.status_code == 200
         assert actual_manifest == expected_pdf_manifest
 
@@ -198,13 +191,7 @@ class TestRoutes:
     ):
 
         mock_all_access_user(client)
-
-        file_id = "ffb1b3b4-0b3b-4b3b-8b3b-0b3b4b3b4b3b"
-        file = FileFactory(
-            FileId=file_id,
-            FileType="File",
-            FileName="open_file_once_closed.png",
-        )
+        file = record_files[5]["file_object"]
         bucket_name = "test_bucket"
         app.config["RECORD_BUCKET_NAME"] = bucket_name
         create_mock_s3_bucket_with_imaage_object(bucket_name, file)
@@ -218,29 +205,29 @@ class TestRoutes:
 
         expected_image_manifest = {
             "@context": "https://iiif.io/api/presentation/3/context.json",
-            "@id": "http://localhost/record/ffb1b3b4-0b3b-4b3b-8b3b-0b3b4b3b4b3b/manifest",
+            "@id": f"http://localhost/record/{file.FileId}/manifest",
             "@type": "sc:Manifest",
-            "description": "Manifest for open_file_once_closed.png",
-            "label": {"en": ["open_file_once_closed.png"]},
+            "description": f"Manifest for {file.FileName}",
+            "label": {"en": [f"{file.FileName}"]},
             "sequences": [
                 {
-                    "@id": "https://presigned-url.com/download.png",
+                    "@id": f"https://presigned-url.com/download.{file.ffid_metadata.Extension}",
                     "@type": "sc:Sequence",
                     "canvases": [
                         {
-                            "@id": "https://presigned-url.com/download.png",
+                            "@id": f"https://presigned-url.com/download.{file.ffid_metadata.Extension}",
                             "@type": "sc:Canvas",
                             "height": 600,
                             "width": 800,
                             "images": [
                                 {
-                                    "@id": "https://presigned-url.com/download.png",
+                                    "@id": f"https://presigned-url.com/download.{file.ffid_metadata.Extension}",
                                     "@type": "oa:Annotation",
                                     "motivation": "sc:painting",
-                                    "on": "https://presigned-url.com/download.png",
+                                    "on": f"https://presigned-url.com/download.{file.ffid_metadata.Extension}",
                                     "resource": {
-                                        "@id": "https://presigned-url.com/download.png",
-                                        "format": "image/png",
+                                        "@id": f"https://presigned-url.com/download.{file.ffid_metadata.Extension}",
+                                        "format": f"image/{file.ffid_metadata.Extension}",
                                         "height": 600,
                                         "type": "dctypes:Image",
                                         "width": 800,
@@ -384,8 +371,7 @@ class TestRoutes:
         Test that a PDF manifest is successfully generated.
         """
         mock_all_access_user(client)
-        file = record_files[0]["file_object"]
-        file.FileName = "document.pdf"
+        file = record_files[1]["file_object"]
         bucket_name = "test_bucket"
         app.config["RECORD_BUCKET_NAME"] = bucket_name
 
@@ -420,6 +406,7 @@ class TestRoutes:
         """
         mock_all_access_user(client)
         file = record_files[0]["file_object"]
+        file.ffid_metadata.Extension = image_format
         file.FileName = f"image.{image_format}"
         bucket_name = "test_bucket"
         app.config["RECORD_BUCKET_NAME"] = bucket_name
@@ -450,7 +437,6 @@ class TestRoutes:
         """
         mock_all_access_user(client)
         file = record_files[0]["file_object"]
-        file.FileName = "unsupported.xyz"
         bucket_name = "test_bucket"
         app.config["RECORD_BUCKET_NAME"] = bucket_name
 

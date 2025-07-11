@@ -2,9 +2,17 @@ import uuid
 
 import factory
 from factory.alchemy import SQLAlchemyModelFactory
-from factory.fuzzy import FuzzyText
+from factory.fuzzy import FuzzyChoice, FuzzyText
 
-from app.main.db.models import Body, Consignment, File, FileMetadata, Series, db
+from app.main.db.models import (
+    Body,
+    Consignment,
+    FFIDMetadata,
+    File,
+    FileMetadata,
+    Series,
+    db,
+)
 
 
 class BodyFactory(SQLAlchemyModelFactory):
@@ -44,6 +52,25 @@ class ConsignmentFactory(SQLAlchemyModelFactory):
     TransferCompleteDatetime = factory.Faker("date_time")
     ExportDatetime = factory.Faker("date_time")
     CreatedDatetime = factory.Faker("date_time")
+
+
+class FFIDMetadataFactory(SQLAlchemyModelFactory):
+    class Meta:
+        model = FFIDMetadata
+        sqlalchemy_session = db.session
+
+    FileId = factory.SelfAttribute("file.FileId")
+    Extension = FuzzyChoice(["pdf", "txt", "docx", "jpg"])
+    PUID = FuzzyText(length=8)
+    FormatName = FuzzyChoice(
+        ["Adobe PDF", "Plain Text", "Word Document", "JPEG Image"]
+    )
+    ExtensionMismatch = factory.Faker("boolean")
+    FFID_Software = FuzzyChoice(["DROID", "Siegfried"])
+    FFID_SoftwareVersion = FuzzyText(length=5)
+    FFID_BinarySignatureFileVersion = FuzzyText(length=5)
+    FFID_ContainerSignatureFileVersion = FuzzyText(length=5)
+    file = factory.SubFactory("app.tests.factories.FileFactory")
 
 
 class FileFactory(SQLAlchemyModelFactory):

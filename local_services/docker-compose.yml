@@ -34,6 +34,8 @@ services:
       - 9600:9600
     networks:
       - opensearch-net
+    depends_on:
+      - ssl-init
 
   opensearch-node2:
     image: opensearchproject/opensearch:latest
@@ -77,6 +79,19 @@ services:
       OPENSEARCH_HOSTS: '["https://opensearch-node1:9200","https://opensearch-node2:9200"]'
     networks:
       - opensearch-net
+    depends_on:
+      - ssl-init
+
+  ssl-init:
+    image: python
+    restart: "no"
+    volumes:
+      - ./ssl_certs_setup.sh:/ssl_certs_setup.sh
+      - ./webapp_postgres_certs:/webapp_postgres_certs
+      - ./opensearch_certs:/opensearch_certs
+      - ./minio_certs:/minio_certs
+    command: ["bash", "-c", "chmod +x /ssl_certs_setup.sh && /ssl_certs_setup.sh"]
+
   postgres:
     image: postgres:17.5
     volumes:
@@ -89,12 +104,16 @@ services:
       - ${KC_POSTGRES_PORT}:5432
     networks:
       - keycloak_network
+    depends_on:
+      - ssl-init
 
   webapp_postgres:
     image: postgres:17.5
+    user: postgres
     volumes:
       - webapp_postgres_data:/var/lib/postgresql/data
       - ./dev-data.sql:/docker-entrypoint-initdb.d/dev-data.sql
+      - ./postgres-init.sh:/docker-entrypoint-initdb.d/postgres-init.sh
       - ./webapp_postgres_certs/postgres_localhost.crt:/var/lib/postgresql/postgres_localhost.crt
       - ./webapp_postgres_certs/postgres_localhost.key:/var/lib/postgresql/postgres_localhost.key
       - ./webapp_postgres_certs/root-ca.pem:/var/lib/postgresql/root-ca.pem
@@ -102,8 +121,11 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_HOST_AUTH_METHOD: scram-sha-256
     ports:
       - ${WEBAPP_POSTGRES_PORT}:5432
+    networks:
+      - default
     command: [
       "postgres",
       "-c", "ssl=on",
@@ -111,6 +133,8 @@ services:
       "-c", "ssl_key_file=/var/lib/postgresql/postgres_localhost.key",
       "-c", "ssl_ca_file=/var/lib/postgresql/root-ca.pem"
     ]
+    depends_on:
+      - ssl-init
 
   keycloak:
     image: quay.io/keycloak/keycloak:26.3.1
@@ -122,6 +146,7 @@ services:
       KC_HTTP_ENABLED: true
       KC_HOSTNAME_STRICT_HTTPS: false
       KC_HEALTH_ENABLED: true
+      KC_SSL_REQUIRED: none
       KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN}
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
       KC_DB: postgres
@@ -149,8 +174,64 @@ services:
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
     volumes:
       - ~/minio/data:/data
+      - ./minio_certs/root-ca.crt:/root/.minio/certs/CAs/my-ca.crt
+      - ./minio_certs/minio.key:/root/.minio/certs/private.key
+      - ./minio_certs/minio.crt:/root/.minio/certs/public.crt
     command: server /data --console-address ":9001"
+    depends_on:
+      - ssl-init
 
+  webapp:
+    env_file:
+      - .docker.env
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    container_name: webapp
+    ports:
+      - "8000:8000"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - FLASK_ENV=development
+      - CONFIG_SOURCE=ENVIRONMENT_VARIABLES
+      - DB_HOST=webapp_postgres
+      - DB_PORT=5432
+      - DB_NAME=${POSTGRES_DB}
+      - DB_USER=${POSTGRES_USER}
+      - DB_PASSWORD=${POSTGRES_PASSWORD}
+      - DB_SSL_ROOT_CERTIFICATE=/app/local_services/webapp_postgres_certs/root-ca.pem
+      - SQLALCHEMY_SSL_MODE=disable
+      - KEYCLOAK_BASE_URI=http://keycloak:8080
+      - KEYCLOAK_CLIENT_ID=ayr-beta
+      - KEYCLOAK_REALM_NAME=tdr
+      - KEYCLOAK_CLIENT_SECRET=test-client-secret
+      - AWS_ENDPOINT_URL=https://127.0.0.1:9000
+      - AWS_ACCESS_KEY_ID=${MINIO_ROOT_USER}
+      - AWS_SECRET_ACCESS_KEY=${MINIO_ROOT_PASSWORD}
+      - AWS_REGION=eu-west-2
+      - SECRET_KEY=test-secret-key
+      - DEFAULT_PAGE_SIZE=10
+      - DEFAULT_DATE_FORMAT=DD/MM/YYYY
+      - RECORD_BUCKET_NAME=test-record-download
+      - FLASKS3_ACTIVE=False
+      - FLASKS3_CDN_DOMAIN=localhost
+      - FLASKS3_BUCKET_NAME=test-record-download
+      - PERF_TEST=False
+      - OPEN_SEARCH_HOST=https://opensearch-node1:9200
+      - OPEN_SEARCH_USERNAME=admin
+      - OPEN_SEARCH_PASSWORD=${OPENSEARCH_INITIAL_ADMIN_PASSWORD}
+      - OPEN_SEARCH_CA_CERTS=/app/local_services/opensearch_certs/root-ca.pem
+      - OPEN_SEARCH_TIMEOUT=10
+    depends_on:
+      - webapp_postgres
+      - keycloak
+      - minio
+      - opensearch-node1
+      - ssl-init
+    networks:
+      - default
+      - keycloak_network
+      - opensearch-net
 
 volumes:
   opensearch-data1:
@@ -161,6 +242,8 @@ volumes:
     driver: local
 
 networks:
+  default:
+    driver: bridge
   opensearch-net:
   keycloak_network:
     driver: bridge

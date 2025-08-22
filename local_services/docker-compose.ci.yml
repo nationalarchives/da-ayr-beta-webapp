@@ -1,0 +1,127 @@
+# GitHub CI specific Docker Compose overrides - Simplified approach
+services:
+  # Single OpenSearch node for CI - use existing networks but disable SSL
+  opensearch-node1:
+    # Override specific settings for CI while keeping main config
+    environment:
+      - discovery.type=single-node
+      - bootstrap.memory_lock=false
+      - "OPENSEARCH_JAVA_OPTS=-Xms256m -Xmx256m"
+      - DISABLE_INSTALL_DEMO_CONFIG=true
+      - DISABLE_SECURITY_PLUGIN=true
+      - path.repo=/mnt/snapshots
+      # Override cluster settings that conflict with single-node
+      - cluster.name=opensearch-ci
+      - node.name=opensearch-ci-node1
+      # Explicitly set conflicting vars to empty to override base config
+      - cluster.initial_master_nodes=
+      - discovery.seed_hosts=
+    volumes:
+      - opensearch-data1:/usr/share/opensearch/data
+      - ./snapshots:/mnt/snapshots
+    # Completely override volumes to remove all SSL certificate mounts
+    depends_on: null
+    # Remove all dependencies for CI
+
+  # Disable node2 for CI simplicity
+  opensearch-node2:
+    deploy:
+      replicas: 0
+
+  # Disable SSL initialization for CI
+  ssl-init:
+    deploy:
+      replicas: 0
+
+  # Override PostgreSQL to disable SSL for CI
+  webapp_postgres:
+    volumes:
+      - webapp_postgres_data:/var/lib/postgresql/data
+      - ./dev-data.sql:/docker-entrypoint-initdb.d/dev-data.sql
+      - ./postgres-init.sh:/docker-entrypoint-initdb.d/postgres-init.sh
+    command: ["postgres"]
+    # Remove SSL-related command options and dependencies
+    depends_on: {}
+    # Remove ssl-init dependency completely
+
+  # Fix opensearch-restore to use HTTP instead of HTTPS
+  opensearch-restore:
+    environment:
+      - OPENSEARCH_INITIAL_ADMIN_PASSWORD=${OPENSEARCH_INITIAL_ADMIN_PASSWORD}
+    depends_on:
+      - opensearch-node1
+    # Remove dependencies on node2 and ssl-init
+    # Override the script to use HTTP without auth
+    command: |
+      bash -c "
+        # Wait until OpenSearch is available via HTTP (no auth needed)
+        until curl -s http://opensearch-node1:9200 -o /dev/null; do
+          echo 'Waiting for OpenSearch to be available...'
+          sleep 5
+        done
+
+        echo 'OpenSearch is available!'
+
+        # Register the snapshot repository (no auth needed)
+        curl -s -X PUT 'http://opensearch-node1:9200/_snapshot/my-fs-repository' -H 'Content-Type: application/json' -d '{\"type\": \"fs\", \"settings\": {\"location\": \"/mnt/snapshots\"}}'
+
+        echo 'Repository registered.'
+
+        # Delete existing documents index if it exists
+        curl -s -X DELETE 'http://opensearch-node1:9200/documents' || echo 'No existing index to delete'
+
+        echo 'Existing index cleared.'
+
+        # Restore from snapshot (no auth needed)
+        curl -s -X POST 'http://opensearch-node1:9200/_snapshot/my-fs-repository/1/_restore' -H 'Content-Type: application/json' -d '{\"indices\": \"documents\", \"include_global_state\": false}'
+
+        echo 'Restore completed.'
+
+        # Keep container running briefly to see results
+        sleep 10
+      "
+
+  webapp:
+    environment:
+      - PYTHONUNBUFFERED=1
+      - FLASK_ENV=development
+      - CONFIG_SOURCE=ENVIRONMENT_VARIABLES
+      - DB_HOST=webapp_postgres
+      - DB_PORT=5432
+      - DB_NAME=${POSTGRES_DB}
+      - DB_USER=${POSTGRES_USER}
+      - DB_PASSWORD=${POSTGRES_PASSWORD}
+      - DB_SSL_ROOT_CERTIFICATE=/app/local_services/webapp_postgres_certs/root-ca.pem
+      - SQLALCHEMY_SSL_MODE=disable
+      - KEYCLOAK_BASE_URI=http://keycloak:8080
+      - KEYCLOAK_CLIENT_ID=ayr-beta
+      - KEYCLOAK_REALM_NAME=tdr
+      - KEYCLOAK_CLIENT_SECRET=test-client-secret
+      - AWS_ENDPOINT_URL=https://127.0.0.1:9000
+      - AWS_ACCESS_KEY_ID=${MINIO_ROOT_USER}
+      - AWS_SECRET_ACCESS_KEY=${MINIO_ROOT_PASSWORD}
+      - AWS_REGION=eu-west-2
+      - AWS_CA_BUNDLE=/app/local_services/minio_certs/root-ca.crt
+      - SECRET_KEY=test-secret-key
+      - DEFAULT_PAGE_SIZE=10
+      - DEFAULT_DATE_FORMAT=DD/MM/YYYY
+      - RECORD_BUCKET_NAME=test-record-download
+      - FLASKS3_ACTIVE=False
+      - FLASKS3_CDN_DOMAIN=localhost
+      - FLASKS3_BUCKET_NAME=test-record-download
+      - PERF_TEST=False
+      # Use service name for OpenSearch with HTTP
+      - OPEN_SEARCH_HOST=http://opensearch-node1:9200
+      # Remove auth since security is disabled
+      - OPEN_SEARCH_USERNAME=
+      - OPEN_SEARCH_PASSWORD=
+      - OPEN_SEARCH_TIMEOUT=30
+      # Disable SSL for CI
+      - OPEN_SEARCH_USE_SSL=false
+      - OPEN_SEARCH_VERIFY_CERTS=false
+      - OPEN_SEARCH_CA_CERTS=
+    depends_on:
+      - webapp_postgres
+      - keycloak
+      - minio
+      - opensearch-node1

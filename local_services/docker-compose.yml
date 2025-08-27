@@ -108,7 +108,7 @@ services:
     command: ["bash", "-c", "chmod +x /ssl_certs_setup.sh && /ssl_certs_setup.sh"]
 
   postgres:
-    image: postgres:17.5
+    image: postgres:17.6
     volumes:
       - kc_postgres_data:/var/lib/postgresql/data
     environment:
@@ -154,7 +154,7 @@ services:
           condition: service_completed_successfully
 
   keycloak:
-    image: quay.io/keycloak/keycloak:26.3.1
+    image: quay.io/keycloak/keycloak:26.3.3
     command: start-dev --import-realm
     environment:
       KC_HOSTNAME: localhost

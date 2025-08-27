@@ -1,3 +1,4 @@
+import json
 import uuid
 
 import boto3
@@ -48,10 +49,12 @@ from app.main.util.pagination import (
 )
 from app.main.util.render_utils import (
     create_presigned_url,
+    create_presigned_url_for_access_copy,
     generate_breadcrumb_values,
     generate_image_manifest,
     generate_pdf_manifest,
     get_download_filename,
+    get_file_extension,
 )
 from app.main.util.search_utils import (
     build_search_results_summary_query,
@@ -717,7 +720,9 @@ def record(record_id: uuid.UUID):
     validate_body_user_groups_or_404(file.consignment.series.body.Name)
 
     file_metadata = get_file_metadata(file.FileId)
-    file_extension = file.ffid_metadata.Extension.lower()
+
+    file_extension = get_file_extension(file)
+
     can_render_file = (
         file_extension in current_app.config["SUPPORTED_RENDER_EXTENSIONS"]
     )
@@ -725,17 +730,27 @@ def record(record_id: uuid.UUID):
     breadcrumb_values = generate_breadcrumb_values(file)
 
     download_filename = get_download_filename(file)
-
+    convertible_extensions = set(
+        json.loads(current_app.config["CONVERTIBLE_EXTENSIONS"])
+    )
     manifest_url = url_for(
         "main.generate_manifest", record_id=record_id, _external=True
     )
-
-    try:
-        presigned_url = create_presigned_url(file)
-    except Exception as e:
-        current_app.app_logger.info(
-            f"Failed to create presigned url for document render non-javascript fallback {e}"
-        )
+    if not can_render_file and file_extension in convertible_extensions:
+        try:
+            presigned_url = create_presigned_url_for_access_copy(file)
+            can_render_file = True
+        except Exception as e:
+            current_app.app_logger.error(
+                f"Failed to create presigned URL for access copy: {e}"
+            )
+    else:
+        try:
+            presigned_url = create_presigned_url(file)
+        except Exception as e:
+            current_app.app_logger.info(
+                f"Failed to create presigned url for document render non-javascript fallback {e}"
+            )
 
     return render_template(
         "record.html",
@@ -847,14 +862,18 @@ def generate_manifest(record_id: uuid.UUID) -> Response:
     validate_body_user_groups_or_404(file.consignment.series.body.Name)
 
     file_name = file.FileName
-    file_url = create_presigned_url(file)
-    manifest_url = f"{url_for('main.generate_manifest', record_id=record_id, _external=True)}"
-    file_type = file.ffid_metadata.Extension.lower()
 
+    manifest_url = f"{url_for('main.generate_manifest', record_id=record_id, _external=True)}"
+
+    file_type = get_file_extension(file)
+    convertible_extensions = set(
+        json.loads(current_app.config["CONVERTIBLE_EXTENSIONS"])
+    )
     if (
         file_type
         in current_app.config["UNIVERSAL_VIEWER_SUPPORTED_APPLICATION_TYPES"]
     ):
+        file_url = create_presigned_url(file)
         return generate_pdf_manifest(file_name, file_url, manifest_url)
     elif (
         file_type
@@ -864,9 +883,13 @@ def generate_manifest(record_id: uuid.UUID) -> Response:
         bucket = current_app.config["RECORD_BUCKET_NAME"]
         key = f"{file.consignment.ConsignmentReference}/{file.FileId}"
         s3_file_object = s3.get_object(Bucket=bucket, Key=key)
+        file_url = create_presigned_url(file)
         return generate_image_manifest(
             file_name, file_url, manifest_url, s3_file_object
         )
+    elif file_type in convertible_extensions:
+        file_url = create_presigned_url_for_access_copy(file)
+        return generate_pdf_manifest(file.FileName, file_url, manifest_url)
 
     current_app.app_logger.error(
         f"Failed to create manifest for file with ID {file.FileId} as not a supported file type"

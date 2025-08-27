@@ -24,6 +24,15 @@ def generate_breadcrumb_values(file):
     }
 
 
+def get_file_extension(file):
+    """Extarct file_extension"""
+    if file.ffid_metadata and file.ffid_metadata.Extension is not None:
+        file_extension = file.ffid_metadata.Extension.lower()
+    else:
+        file_extension = file.FileName.split(".")[-1].lower()
+    return file_extension
+
+
 def get_download_filename(file):
     """Generate download filename for a file."""
     if file.CiteableReference:
@@ -43,6 +52,16 @@ def create_presigned_url(file: File) -> str:
         "get_object", Params={"Bucket": bucket, "Key": key}, ExpiresIn=10
     )
 
+    return presigned_url
+
+
+def create_presigned_url_for_access_copy(file: File) -> str:
+    s3 = boto3.client("s3")
+    bucket = current_app.config["ACCESS_COPY_BUCKET"]
+    key = f"{file.consignment.ConsignmentReference}/{file.FileId}"
+    presigned_url = s3.generate_presigned_url(
+        "get_object", Params={"Bucket": bucket, "Key": key}, ExpiresIn=10
+    )
     return presigned_url
 
 

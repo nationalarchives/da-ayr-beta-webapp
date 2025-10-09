@@ -32,10 +32,6 @@ RUN npm run build
 # Copy source code for development
 COPY . .
 
-# Create SSL certificates for development
-RUN openssl req -x509 -newkey rsa:4096 -nodes -out cert.pem -keyout key.pem -days 365 \
-    -subj "/C=GB/ST=England/L=London/O=Test/CN=DNS:localhost,IP:127.0.0.1"
-
 ENV FLASK_ENV=development
 ENV FLASK_DEBUG=1
 ENV PYTHONUNBUFFERED=1

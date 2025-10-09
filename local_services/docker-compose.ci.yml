@@ -212,10 +212,22 @@ services:
     build:
       context: ..
       dockerfile: Dockerfile
+      target: development
     container_name: webapp
     ports:
       - "5000:5000"
     volumes:
+      # Mount source code for hot reloading
+      - ..:/app
+      # Preserve built CSS files from container
+      - webapp_css:/app/app/static/src/css
+      # Exclude build artifacts and cache directories
+      - /app/node_modules
+      - /app/.git
+      - /app/__pycache__
+      - /app/.pytest_cache
+      - /app/.venv
+      # Mount certificates
       - ./minio_certs:/app/local_services/minio_certs
       - ./opensearch_certs:/app/local_services/opensearch_certs
       - ./webapp_postgres_certs:/app/local_services/webapp_postgres_certs
@@ -229,6 +241,7 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
       - FLASK_ENV=development
+      - FLASK_DEBUG=1
       - CONFIG_SOURCE=ENVIRONMENT_VARIABLES
       - DB_HOST=webapp_postgres
       - DB_PORT=5432
@@ -280,6 +293,8 @@ volumes:
   webapp_postgres_data:
     driver: local
   minio_data:
+    driver: local
+  webapp_css:
     driver: local
 
 networks:

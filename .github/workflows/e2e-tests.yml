@@ -12,7 +12,8 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
     - name: Start Docker Compose with CI-specific configuration
-      run: docker compose -f local_services/docker-compose.ci.yml up -d
+      run: docker compose -f local_services/docker-compose.ci.yml up -d --wait
+
     - name: Set up E2E test environment
       run: | # pragma: allowlist secret
         cat > .env.e2e_tests << EOF

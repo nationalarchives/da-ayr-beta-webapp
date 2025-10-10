@@ -19,23 +19,45 @@ jobs:
       uses: actions/cache@v4
       with:
         path: /tmp/.buildx-cache
-        key: ${{ runner.os }}-webapp-buildx-${{ hashFiles('**/Dockerfile', '**/pyproject.toml', '**/poetry.lock', '**/package*.json') }}
+        key: ${{ runner.os }}-webapp-buildx-${{ hashFiles('**/Dockerfile', '**/pyproject.toml', '**/poetry.lock', '**/package*.json') }}-${{ github.sha }}
         restore-keys: |
+          ${{ runner.os }}-webapp-buildx-${{ hashFiles('**/Dockerfile', '**/pyproject.toml', '**/poetry.lock', '**/package*.json') }}-
           ${{ runner.os }}-webapp-buildx-
+
+    - name: Check cache status
+      run: |
+        echo "=== Cache Status Check ==="
+        echo "Cache directory exists: $(test -d /tmp/.buildx-cache && echo 'YES' || echo 'NO')"
+        if [ -d /tmp/.buildx-cache ]; then
+          echo "Cache directory contents:"
+          ls -la /tmp/.buildx-cache
+          echo "Cache size: $(du -sh /tmp/.buildx-cache | cut -f1)"
+        else
+          echo "No cache directory found - this is a cache miss"
+        fi
 
     - name: Pre-build webapp image with cache
       run: |
+        echo "=== Building Docker image ==="
         docker buildx build \
           --cache-from type=local,src=/tmp/.buildx-cache \
           --cache-to type=local,dest=/tmp/.buildx-cache-new,mode=max \
+          --progress=plain \
           --load \
           -t da-ayr-beta-webapp-webapp:latest \
           -f Dockerfile .
 
-    - name: Move cache
+    - name: Move cache and show results
       run: |
+        echo "=== Updating cache ==="
         rm -rf /tmp/.buildx-cache
         mv /tmp/.buildx-cache-new /tmp/.buildx-cache || true
+        if [ -d /tmp/.buildx-cache ]; then
+          echo "Updated cache size: $(du -sh /tmp/.buildx-cache | cut -f1)"
+          echo "Cache files count: $(find /tmp/.buildx-cache -type f | wc -l)"
+        else
+          echo "Warning: No cache directory after build"
+        fi
 
     - name: Start Docker Compose with CI-specific configuration
       run: cd local_services && docker compose -f docker-compose.ci.yml up -d --wait

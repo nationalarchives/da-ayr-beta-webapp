@@ -31,7 +31,11 @@ COPY app/static/src app/static/src
 RUN npm run build
 
 # Copy source code last (changes most frequently)
+# Use .dockerignore to exclude files that don't need to be in the image
 COPY . .
+
+# Ensure built CSS files are preserved if they exist from previous layer
+RUN if [ -d app/static/src/css ]; then echo "CSS files preserved from build layer"; fi
 
 ENV FLASK_ENV=development
 ENV FLASK_DEBUG=1

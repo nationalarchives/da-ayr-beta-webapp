@@ -19,14 +19,14 @@ jobs:
       uses: actions/cache@v4
       with:
         path: /tmp/.buildx-cache
-        key: ${{ runner.os }}-webapp-buildx-${{ hashFiles('**/Dockerfile', '**/pyproject.toml', '**/poetry.lock', '**/package*.json') }}-${{ github.sha }}
+        key: ${{ runner.os }}-webapp-buildx-${{ hashFiles('**/Dockerfile', '**/pyproject.toml', '**/poetry.lock', '**/package*.json') }}
         restore-keys: |
-          ${{ runner.os }}-webapp-buildx-${{ hashFiles('**/Dockerfile', '**/pyproject.toml', '**/poetry.lock', '**/package*.json') }}-
           ${{ runner.os }}-webapp-buildx-
 
     - name: Check cache status
       run: |
         echo "=== Cache Status Check ==="
+        echo "Cache key: ${{ runner.os }}-webapp-buildx-${{ hashFiles('**/Dockerfile', '**/pyproject.toml', '**/poetry.lock', '**/package*.json') }}"
         echo "Cache directory exists: $(test -d /tmp/.buildx-cache && echo 'YES' || echo 'NO')"
         if [ -d /tmp/.buildx-cache ]; then
           echo "Cache directory contents:"
@@ -39,6 +39,9 @@ jobs:
     - name: Pre-build webapp image with cache
       run: |
         echo "=== Building Docker image ==="
+        # Create cache directory if it doesn't exist
+        mkdir -p /tmp/.buildx-cache
+
         docker buildx build \
           --cache-from type=local,src=/tmp/.buildx-cache \
           --cache-to type=local,dest=/tmp/.buildx-cache-new,mode=max \
@@ -50,10 +53,17 @@ jobs:
     - name: Move cache and show results
       run: |
         echo "=== Updating cache ==="
-        rm -rf /tmp/.buildx-cache
-        mv /tmp/.buildx-cache-new /tmp/.buildx-cache || true
+        # Only replace cache if new cache was created successfully
+        if [ -d /tmp/.buildx-cache-new ]; then
+          rm -rf /tmp/.buildx-cache
+          mv /tmp/.buildx-cache-new /tmp/.buildx-cache
+          echo "Cache updated successfully"
+        else
+          echo "Warning: No new cache created, keeping existing cache"
+        fi
+
         if [ -d /tmp/.buildx-cache ]; then
-          echo "Updated cache size: $(du -sh /tmp/.buildx-cache | cut -f1)"
+          echo "Final cache size: $(du -sh /tmp/.buildx-cache | cut -f1)"
           echo "Cache files count: $(find /tmp/.buildx-cache -type f | wc -l)"
         else
           echo "Warning: No cache directory after build"

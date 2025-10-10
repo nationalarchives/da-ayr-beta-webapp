@@ -3,7 +3,7 @@ FROM python:3.13-slim
 
 WORKDIR /app
 
-# Install system dependencies including Node.js
+# Install system dependencies including Node.js (cached layer)
 RUN apt-get update && apt-get install -y \
     gcc \
     libpq-dev \
@@ -13,23 +13,24 @@ RUN apt-get update && apt-get install -y \
     npm \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Poetry
+# Install Poetry (cached layer)
 RUN curl -sSL https://install.python-poetry.org | python3 -
 ENV PATH="/root/.local/bin:$PATH"
 
-# Copy and install Python dependencies
+# Copy Python dependency files first for better caching
 COPY pyproject.toml poetry.lock ./
-RUN poetry config virtualenvs.create false
-RUN poetry install --no-root
+RUN poetry config virtualenvs.create false && \
+    poetry install --no-root
 
-# Copy and build Node.js assets
+# Copy Node.js dependency files and install
 COPY package*.json ./
 RUN npm ci
 
+# Copy static assets and build (only rebuilds if static files change)
 COPY app/static/src app/static/src
 RUN npm run build
 
-# Copy source code for development
+# Copy source code last (changes most frequently)
 COPY . .
 
 ENV FLASK_ENV=development

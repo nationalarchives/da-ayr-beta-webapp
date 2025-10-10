@@ -177,6 +177,7 @@ services:
   webapp:
     env_file:
       - .docker.env
+    image: da-ayr-beta-webapp-webapp:latest
     build:
       context: ..
       dockerfile: Dockerfile

@@ -1,5 +1,4 @@
 services:
-  # Single OpenSearch node for CI
   opensearch-node1:
     image: opensearchproject/opensearch:latest
     container_name: opensearch-node1
@@ -27,6 +26,12 @@ services:
       - 9600:9600
     networks:
       - opensearch-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9200"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
 
   opensearch-dashboards:
     image: opensearchproject/opensearch-dashboards:latest
@@ -52,14 +57,6 @@ services:
       - opensearch-net
     command: |
       bash -c "
-        # Wait until OpenSearch is available via HTTP (no auth needed)
-        until curl -s http://opensearch-node1:9200 -o /dev/null; do
-          echo 'Waiting for OpenSearch to be available...'
-          sleep 5
-        done
-
-        echo 'OpenSearch is available!'
-
         # Register the snapshot repository (no auth needed)
         curl -s -X PUT 'http://opensearch-node1:9200/_snapshot/my-fs-repository' -H 'Content-Type: application/json' -d '{\"type\": \"fs\", \"settings\": {\"location\": \"/mnt/snapshots\"}}'
 
@@ -137,34 +134,12 @@ services:
       - postgres
     networks:
       - keycloak_network
-
-  keycloak-config:
-    image: alpine/curl
-    depends_on:
-      - keycloak
-    networks:
-      - keycloak_network
-    entrypoint: |
-      sh -c "
-        # Wait for Keycloak to be ready
-        echo 'Waiting for Keycloak to be ready...'
-        until curl -f http://keycloak:8080/realms/master/.well-known/openid-configuration; do
-          echo 'Still waiting for Keycloak...'
-          sleep 5
-        done
-
-        echo 'Keycloak is ready!'
-        echo 'Note: You may need to manually run the following commands in the keycloak container:'
-        echo 'docker exec keycloak /opt/keycloak/bin/kcadm.sh config credentials --server http://localhost:8080 --realm master --user admin --password password'
-        echo 'docker exec keycloak /opt/keycloak/bin/kcadm.sh update realms/master -s sslRequired=NONE'
-        echo 'docker exec keycloak /opt/keycloak/bin/kcadm.sh update realms/tdr -s sslRequired=NONE'
-
-        # Keep container running briefly
-        sleep 30
-      "
-    environment:
-      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN}
-      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
+    # healthcheck:
+    #   test: ["CMD", "curl", "-f", "http://localhost:8080/realms/master/.well-known/openid-configuration"]
+    #   interval: 10s
+    #   timeout: 5s
+    #   retries: 30
+    #   start_period: 10s
 
   minio:
     image: quay.io/minio/minio
@@ -198,13 +173,6 @@ services:
       /usr/bin/mc mb myminio/test-record-download --ignore-existing;
       /usr/bin/mc cp --recursive /tmp/files/ myminio/test-record-download/ || echo 'No files to copy or copy failed';
       "
-
-  socat-localhost:
-    image: alpine/socat
-    command: tcp-listen:9000,fork,reuseaddr tcp-connect:minio:9000
-    network_mode: service:webapp
-    depends_on:
-      - minio
 
   webapp:
     env_file:
@@ -284,7 +252,7 @@ services:
       - minio
       - opensearch-node1
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5000"]
+      test: ["CMD", "curl", "-f", "-k", "https://localhost:5000"]
       interval: 10s
       timeout: 5s
       retries: 30

@@ -37,6 +37,10 @@ COPY . .
 # Ensure built CSS files are preserved if they exist from previous layer
 RUN if [ -d app/static/src/css ]; then echo "CSS files preserved from build layer"; fi
 
+# Generate SSL certificates for Flask development server
+RUN openssl req -x509 -newkey rsa:2048 -nodes -out cert.pem -keyout key.pem -days 365 \
+    -subj '/C=GB/ST=Test/L=Test/O=Test/CN=localhost'
+
 ENV FLASK_ENV=development
 ENV FLASK_DEBUG=1
 ENV PYTHONUNBUFFERED=1

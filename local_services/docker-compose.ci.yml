@@ -174,6 +174,13 @@ services:
       /usr/bin/mc cp --recursive /tmp/files/ myminio/test-record-download/ || echo 'No files to copy or copy failed';
       "
 
+  socat-localhost:
+    image: alpine/socat
+    command: tcp-listen:9000,fork,reuseaddr tcp-connect:minio:9000
+    network_mode: service:webapp
+    depends_on:
+      - minio
+
   webapp:
     env_file:
       - .docker.env
@@ -195,8 +202,6 @@ services:
     volumes:
       # Mount source code for hot reloading
       - ..:/app
-      # Preserve built CSS files from container
-      - webapp_css:/app/app/static/src/css
       # Exclude build artifacts and cache directories
       - /app/node_modules
       - /app/.git
@@ -214,47 +219,6 @@ services:
       - minio_network
     links:
       - opensearch-node1
-    environment:
-      - PYTHONUNBUFFERED=1
-      - FLASK_ENV=development
-      - FLASK_DEBUG=1
-      - CONFIG_SOURCE=ENVIRONMENT_VARIABLES
-      - DB_HOST=webapp_postgres
-      - DB_PORT=5432
-      - DB_NAME=${POSTGRES_DB}
-      - DB_USER=${POSTGRES_USER}
-      - DB_PASSWORD=${POSTGRES_PASSWORD}
-      - DB_SSL_ROOT_CERTIFICATE=/app/local_services/webapp_postgres_certs/root-ca.pem
-      - SQLALCHEMY_SSL_MODE=disable
-      - KEYCLOAK_BASE_URI=http://keycloak:8080
-      - KEYCLOAK_CLIENT_ID=ayr-beta
-      - KEYCLOAK_REALM_NAME=tdr
-      - KEYCLOAK_CLIENT_SECRET=test-client-secret
-      - AWS_ENDPOINT_URL=http://127.0.0.1:9000
-      - AWS_ACCESS_KEY_ID=${MINIO_ROOT_USER}
-      - AWS_SECRET_ACCESS_KEY=${MINIO_ROOT_PASSWORD}
-      - AWS_REGION=eu-west-2
-      - AWS_CA_BUNDLE=/app/local_services/minio_certs/root-ca.crt
-      - SECRET_KEY=test-secret-key
-      - DEFAULT_PAGE_SIZE=10
-      - DEFAULT_DATE_FORMAT=DD/MM/YYYY
-      - RECORD_BUCKET_NAME=test-record-download
-      - FLASKS3_ACTIVE=False
-      - FLASKS3_CDN_DOMAIN=localhost
-      - FLASKS3_BUCKET_NAME=test-record-download
-      - ACCESS_COPY_BUCKET="test-access-copy"
-      - CONVERTIBLE_EXTENSIONS=".doc,.docx"
-      - PERF_TEST=False
-      # Use service name for OpenSearch with HTTP
-      - OPEN_SEARCH_HOST=http://opensearch-node1:9200
-      # Remove auth since security is disabled
-      - OPEN_SEARCH_USERNAME=
-      - OPEN_SEARCH_PASSWORD=
-      - OPEN_SEARCH_TIMEOUT=30
-      # Disable SSL for CI
-      - OPEN_SEARCH_USE_SSL=false
-      - OPEN_SEARCH_VERIFY_CERTS=false
-      - OPEN_SEARCH_CA_CERTS=
     depends_on:
       - webapp_postgres
       - keycloak
@@ -275,8 +239,6 @@ volumes:
   webapp_postgres_data:
     driver: local
   minio_data:
-    driver: local
-  webapp_css:
     driver: local
 
 networks:

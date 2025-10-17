@@ -42,6 +42,7 @@ services:
       - "5601"
     environment:
       OPENSEARCH_HOSTS: '["http://opensearch-node1:9200"]'
+      DISABLE_SECURITY_DASHBOARDS_PLUGIN: 'true'
     networks:
       - opensearch-net
     depends_on:
@@ -50,13 +51,16 @@ services:
   opensearch-restore:
     env_file:
       - .docker.env
-    image: python
+    image: curlimages/curl:latest
     environment:
       - OPENSEARCH_INITIAL_ADMIN_PASSWORD=${OPENSEARCH_INITIAL_ADMIN_PASSWORD}
     depends_on:
-      - opensearch-node1
+      opensearch-node1:
+        condition: service_healthy
     networks:
       - opensearch-net
+    volumes:
+      - ./snapshots:/mnt/snapshots
     command: |
       bash -c "
         # Register the snapshot repository (no auth needed)
@@ -70,12 +74,21 @@ services:
         echo 'Existing index cleared.'
 
         # Restore from snapshot (no auth needed)
-        curl -s -X POST 'http://opensearch-node1:9200/_snapshot/my-fs-repository/1/_restore' -H 'Content-Type: application/json' -d '{\"indices\": \"documents\", \"include_global_state\": false}'
+        restore_response=$$(curl -s -X POST 'http://opensearch-node1:9200/_snapshot/my-fs-repository/1/_restore' -H 'Content-Type: application/json' -d '{\"indices\": \"documents\", \"include_global_state\": false}')
+        echo \"Restore response: $$restore_response\"
 
-        echo 'Restore completed.'
+        # Wait for restore to complete
+        echo 'Waiting for restore to complete...'
+        until curl -s 'http://opensearch-node1:9200/documents/_search?size=0' | grep -q '\"total\"'; do
+          echo 'Waiting for documents to be available...'
+          sleep 2
+        done
 
-        # Keep container running briefly to see results
-        sleep 10
+        # Verify the restore was successful
+        doc_count=$$(curl -s 'http://opensearch-node1:9200/documents/_count' | grep -o '\"count\":[0-9]*' | cut -d':' -f2)
+        echo \"Restore completed successfully. Document count: $$doc_count\"
+
+        exit 0
       "
 
   postgres:
@@ -236,6 +249,7 @@ services:
       - keycloak
       - minio
       - opensearch-node1
+      - opensearch-restore
     healthcheck:
       test: ["CMD", "curl", "-f", "-k", "https://localhost:5000"]
       interval: 10s

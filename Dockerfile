@@ -1,44 +1,46 @@
-# Build stage for Node.js assets
-FROM node:24-slim AS node-builder
+# Development Dockerfile - single stage for dev-only usage
+FROM python:3.13-slim
 
 WORKDIR /app
 
-COPY package*.json ./
-
-RUN npm ci
-
-COPY app/static/src app/static/src
-
-RUN npm run build
-
-# Production stage
-FROM python:3.11-slim
-
-WORKDIR /app
-
+# Install system dependencies including Node.js (cached layer)
 RUN apt-get update && apt-get install -y \
     gcc \
     libpq-dev \
     openssl \
     curl \
+    nodejs \
+    npm \
     && rm -rf /var/lib/apt/lists/*
 
+# Install Poetry (cached layer)
 RUN curl -sSL https://install.python-poetry.org | python3 -
 ENV PATH="/root/.local/bin:$PATH"
 
+# Copy Python dependency files first for better caching
 COPY pyproject.toml poetry.lock ./
+RUN poetry config virtualenvs.create false && \
+    poetry install --no-root
 
-RUN poetry config virtualenvs.create false
+# Copy Node.js dependency files and install
+COPY package*.json ./
+RUN npm ci
 
-RUN poetry install --no-root
+# Copy static assets and build (only rebuilds if static files change)
+COPY app/static/src app/static/src
+RUN npm run build
 
+# Copy source code last (changes most frequently)
+# Use .dockerignore to exclude files that don't need to be in the image
 COPY . .
 
-COPY --from=node-builder /app/app/static/src/css app/static/src/css
+# Ensure built CSS files are preserved if they exist from previous layer
+RUN if [ -d app/static/src/css ]; then echo "CSS files preserved from build layer"; fi
 
-RUN openssl req -x509 -newkey rsa:4096 -nodes -out cert.pem -keyout key.pem -days 365 \
-    -subj "/C=GB/ST=England/L=London/O=Test/CN=DNS:localhost,IP:127.0.0.1"
+ENV FLASK_ENV=development
+ENV FLASK_DEBUG=1
+ENV PYTHONUNBUFFERED=1
 
 EXPOSE 5000
 
-CMD ["poetry", "run", "python", "-m", "flask", "--app", "main_app:app", "run", "--host=0.0.0.0", "--port=5000"]
+CMD ["poetry", "run", "flask", "run", "--host=0.0.0.0", "--port=5000", "--debug"]

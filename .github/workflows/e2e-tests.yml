@@ -86,7 +86,7 @@ jobs:
         EOF
 
     - name: Start Docker Compose with CI-specific configuration
-      run: cd local_services && docker compose -f docker-compose.ci.yml up -d --wait
+      run: cd local_services && docker compose -f docker-compose.ci.yml --env-file .docker.env up -d --wait
 
     - name: Set up E2E test environment
       run: | # pragma: allowlist secret

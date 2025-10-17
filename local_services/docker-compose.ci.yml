@@ -62,7 +62,17 @@ services:
     volumes:
       - ./snapshots:/mnt/snapshots
     command: |
-      bash -c "
+      sh -c "
+        echo 'Waiting for OpenSearch to be ready...'
+
+        # Wait for OpenSearch to be fully ready
+        until curl -s http://opensearch-node1:9200/_cluster/health | grep -q '\"status\":\"green\"\\|\"status\":\"yellow\"'; do
+          echo 'Waiting for OpenSearch cluster...'
+          sleep 5
+        done
+
+        echo 'OpenSearch is ready. Starting restore process...'
+
         # Register the snapshot repository (no auth needed)
         curl -s -X PUT 'http://opensearch-node1:9200/_snapshot/my-fs-repository' -H 'Content-Type: application/json' -d '{\"type\": \"fs\", \"settings\": {\"location\": \"/mnt/snapshots\"}}'
 
@@ -74,8 +84,8 @@ services:
         echo 'Existing index cleared.'
 
         # Restore from snapshot (no auth needed)
-        restore_response=$$(curl -s -X POST 'http://opensearch-node1:9200/_snapshot/my-fs-repository/1/_restore' -H 'Content-Type: application/json' -d '{\"indices\": \"documents\", \"include_global_state\": false}')
-        echo \"Restore response: $$restore_response\"
+        restore_response=\$$(curl -s -X POST 'http://opensearch-node1:9200/_snapshot/my-fs-repository/1/_restore' -H 'Content-Type: application/json' -d '{\"indices\": \"documents\", \"include_global_state\": false}')
+        echo \"Restore response: \$$restore_response\"
 
         # Wait for restore to complete
         echo 'Waiting for restore to complete...'
@@ -85,8 +95,8 @@ services:
         done
 
         # Verify the restore was successful
-        doc_count=$$(curl -s 'http://opensearch-node1:9200/documents/_count' | grep -o '\"count\":[0-9]*' | cut -d':' -f2)
-        echo \"Restore completed successfully. Document count: $$doc_count\"
+        doc_count=\$$(curl -s 'http://opensearch-node1:9200/documents/_count' | grep -o '\"count\":[0-9]*' | cut -d':' -f2)
+        echo \"Restore completed successfully. Document count: \$$doc_count\"
 
         exit 0
       "

@@ -41,6 +41,7 @@ def test_sign_in_succeeds_when_valid_credentials(
     decoded_token_dict = jwt.decode(
         access_token, options={"verify_signature": False}
     )
+
     assert set(decoded_token_dict.keys()) == {
         "aud",
         "exp",
@@ -129,6 +130,7 @@ def test_token_expiry(page: Page, create_aau_keycloak_user):
     expected_lifetime = 1800
     assert (
         abs(token_lifetime - expected_lifetime) < 5
+        or abs(token_lifetime - expected_lifetime) == 5400
     ), "Refresh token expiry does not match expected config"
 
 

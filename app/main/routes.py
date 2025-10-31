@@ -56,6 +56,18 @@ from app.main.util.render_utils import (
     get_download_filename,
     get_file_extension,
 )
+from app.main.util.request_validator import (
+    BrowseConsignmentSchema,
+    BrowseRequestSchema,
+    BrowseSeriesSchema,
+    BrowseTransferringBodySchema,
+    DownloadRequestSchema,
+    RecordRequestSchema,
+    SearchRequestSchema,
+    SearchResultsSummarySchema,
+    SearchTransferringBodySchema,
+    validate_request,
+)
 from app.main.util.search_utils import (
     build_search_results_summary_query,
     build_search_transferring_body_query,
@@ -154,10 +166,9 @@ def accessibility():
 @bp.route("/browse", methods=["GET"])
 @access_token_sign_in_required
 @log_page_view
+@validate_request(BrowseRequestSchema, location="combined")
 def browse():
     form = SearchForm()
-    page = int(request.args.get("page", 1))
-    per_page = int(current_app.config["DEFAULT_PAGE_SIZE"])
     transferring_bodies = []
 
     ayr_user = AYRUser(session.get("user_groups"))
@@ -169,6 +180,10 @@ def browse():
         # all access user (all_access_user)
         for body in Body.query.all():
             transferring_bodies.append(body.Name)
+
+        validated_data = request.validated_data
+        page = validated_data["page"]
+        per_page = validated_data["per_page"]
 
         date_validation_errors = []
         from_date = None
@@ -234,6 +249,7 @@ def browse():
 @bp.route("/browse/transferring_body/<uuid:_id>", methods=["GET"])
 @access_token_sign_in_required
 @log_page_view
+@validate_request(BrowseTransferringBodySchema, location="combined")
 def browse_transferring_body(_id: uuid.UUID):
     """
     Render the browse transferring body view page.
@@ -251,8 +267,9 @@ def browse_transferring_body(_id: uuid.UUID):
     breadcrumb_values = {0: {"transferring_body": body.Name}}
 
     form = SearchForm()
-    page = int(request.args.get("page", 1))
-    per_page = int(current_app.config["DEFAULT_PAGE_SIZE"])
+    validated_data = request.validated_data
+    page = validated_data["page"]
+    per_page = validated_data["per_page"]
 
     date_validation_errors = []
     from_date = None
@@ -318,6 +335,7 @@ def browse_transferring_body(_id: uuid.UUID):
 @bp.route("/browse/series/<uuid:_id>", methods=["GET"])
 @access_token_sign_in_required
 @log_page_view
+@validate_request(BrowseSeriesSchema, location="combined")
 def browse_series(_id: uuid.UUID):
     """
     Render the browse series view page.
@@ -340,8 +358,9 @@ def browse_series(_id: uuid.UUID):
     }
 
     form = SearchForm()
-    page = int(request.args.get("page", 1))
-    per_page = int(current_app.config["DEFAULT_PAGE_SIZE"])
+    validated_data = request.validated_data
+    page = validated_data["page"]
+    per_page = validated_data["per_page"]
 
     date_validation_errors = []
     from_date = None
@@ -407,6 +426,7 @@ def browse_series(_id: uuid.UUID):
 @bp.route("/browse/consignment/<uuid:_id>", methods=["GET"])
 @access_token_sign_in_required
 @log_page_view
+@validate_request(BrowseConsignmentSchema, location="combined")
 def browse_consignment(_id: uuid.UUID):
     """
     Render the browse consignment view page.
@@ -432,8 +452,9 @@ def browse_consignment(_id: uuid.UUID):
     }
 
     form = SearchForm()
-    page = int(request.args.get("page", 1))
-    per_page = int(current_app.config["DEFAULT_PAGE_SIZE"])
+    validated_data = request.validated_data
+    page = validated_data["page"]
+    per_page = validated_data["per_page"]
 
     date_validation_errors = []
     from_date = None
@@ -496,6 +517,7 @@ def browse_consignment(_id: uuid.UUID):
 @bp.route("/search", methods=["GET"])
 @access_token_sign_in_required
 @log_page_view
+@validate_request(SearchRequestSchema, location="combined")
 def search():
     form_data = request.form.to_dict()
     args_data = request.args.to_dict()
@@ -528,14 +550,16 @@ def search():
 @bp.route("/search_results_summary", methods=["GET"])
 @access_token_sign_in_required
 @log_page_view
+@validate_request(SearchResultsSummarySchema, location="combined")
 def search_results_summary():
     ayr_user = AYRUser(session.get("user_groups"))
     if ayr_user.is_standard_user:
         abort(403)
 
     form = SearchForm()
-    per_page = int(current_app.config["DEFAULT_PAGE_SIZE"])
-    page = int(request.args.get("page", 1))
+    validated_data = request.validated_data
+    page = validated_data["page"]
+    per_page = validated_data["per_page"]
 
     query, search_area = get_query_and_search_area(request)
     filters = {"query": query}
@@ -585,13 +609,15 @@ def search_results_summary():
 @bp.route("/search/transferring_body/<uuid:_id>", methods=["GET"])
 @access_token_sign_in_required
 @log_page_view
+@validate_request(SearchTransferringBodySchema, location="combined")
 def search_transferring_body(_id: uuid.UUID):
     body = db.session.get(Body, _id)
     validate_body_user_groups_or_404(body.Name)
 
     form = SearchForm()
-    per_page = int(current_app.config["DEFAULT_PAGE_SIZE"])
-    page = int(request.args.get("page", 1))
+    validated_data = request.validated_data
+    page = validated_data["page"]
+    per_page = validated_data["per_page"]
     open_all = get_param("open_all", request)
     sort = get_param("sort", request) or "file_name"
     highlight_tag = f"uuid_prefix_{uuid.uuid4().hex}"
@@ -697,6 +723,7 @@ def search_transferring_body(_id: uuid.UUID):
 @bp.route("/record/<uuid:record_id>", methods=["GET"])
 @access_token_sign_in_required
 @log_page_view
+@validate_request(RecordRequestSchema, location="path")
 def record(record_id: uuid.UUID):
     """
     Render the record details page.
@@ -776,6 +803,7 @@ def record(record_id: uuid.UUID):
 @bp.route("/download/<uuid:record_id>", methods=["GET"])
 @access_token_sign_in_required
 @log_page_view
+@validate_request(DownloadRequestSchema, location="path")
 def download_record(record_id: uuid.UUID):
     s3 = boto3.client("s3")
     file = db.session.get(File, record_id)
@@ -856,6 +884,7 @@ def http_exception(error):
 @bp.route("/record/<uuid:record_id>/manifest")
 @access_token_sign_in_required
 @log_page_view
+@validate_request(RecordRequestSchema, location="path")
 def generate_manifest(record_id: uuid.UUID) -> Response:
     file = db.session.get(File, record_id)
 

@@ -66,7 +66,7 @@ fields_without_file_name = [
 expected_base_dsl_search_query = {
     "query": {
         "bool": {
-            "must": [
+            "should": [
                 {
                     "multi_match": {
                         "query": "test_query",
@@ -76,6 +76,7 @@ expected_base_dsl_search_query = {
                     }
                 }
             ],
+            "minimum_should_match": 1,
             "filter": [{"clause_1": "test_2"}],
         }
     },
@@ -356,8 +357,8 @@ def test_build_dsl_search_query():
     assert dsl_query == expected_base_dsl_search_query
 
 
-def test_build_dsl_search_query_and_exact_fuzzy_search():
-    query = '"exact match"+fuzzy+search'
+def test_build_dsl_search_query_and_non_fuzzy_fuzzy_search():
+    query = '"non_fuzzy"+fuzzy+search'
     search_fields = ["field_1"]
     filter_clauses = [{"clause_1": "test_2"}]
     quoted_phrases, single_terms = extract_search_terms(query)
@@ -365,19 +366,11 @@ def test_build_dsl_search_query_and_exact_fuzzy_search():
     expected_dsl_query = {
         "query": {
             "bool": {
-                "must": [
-                    {
-                        "multi_match": {
-                            "query": "exact match",
-                            "fields": search_fields,
-                            "type": "phrase",
-                            "lenient": True,
-                        }
-                    },
+                "should": [
                     {
                         "multi_match": {
                             "query": "fuzzy",
-                            "fields": search_fields,
+                            "fields": ["field_1"],
                             "fuzziness": "AUTO",
                             "lenient": True,
                         }
@@ -385,13 +378,14 @@ def test_build_dsl_search_query_and_exact_fuzzy_search():
                     {
                         "multi_match": {
                             "query": "search",
-                            "fields": search_fields,
+                            "fields": ["field_1"],
                             "fuzziness": "AUTO",
                             "lenient": True,
                         }
                     },
                 ],
-                "filter": filter_clauses,
+                "minimum_should_match": 1,
+                "filter": [{"clause_1": "test_2"}],
             }
         },
         "sort": {"sort": "foobar"},
@@ -418,10 +412,9 @@ def test_build_search_results_summary_query():
         {"sort": "foobar"},
     )
     assert dsl_query == {
-        **expected_base_dsl_search_query,
         "query": {
             "bool": {
-                "must": [
+                "should": [
                     {
                         "multi_match": {
                             "query": "test_query",
@@ -431,9 +424,12 @@ def test_build_search_results_summary_query():
                         }
                     }
                 ],
+                "minimum_should_match": 1,
                 "filter": [],
             }
         },
+        "sort": {"sort": "foobar"},
+        "_source": True,
         "aggs": {
             "aggregate_by_transferring_body": {
                 "terms": {"field": "transferring_body_id.keyword"},
@@ -452,10 +448,23 @@ def test_build_search_results_summary_query():
 
 def test_build_search_transferring_body_query():
     transferring_body_id = "test_transferring_body_id"
-    query = "test_query"
+    query = '"non_fuzzy"+fuzzy'
     quoted_phrases, single_terms = extract_search_terms(query)
+    search_fields = [
+        "file_name",
+        "description",
+        "foi_exemption_code",
+        "content",
+        "closure_start_date",
+        "end_date",
+        "date_last_modified",
+        "citeable_reference",
+        "series_name",
+        "consignment_reference",
+    ]
+
     dsl_query = build_search_transferring_body_query(
-        ["field_1"],
+        search_fields,
         transferring_body_id,
         "test_highlight_key",
         quoted_phrases,
@@ -463,28 +472,58 @@ def test_build_search_transferring_body_query():
         {"sort": "foobar"},
     )
     assert dsl_query == {
-        **expected_base_dsl_search_query,
         "query": {
             "bool": {
-                "must": [
+                "should": [
                     {
                         "multi_match": {
-                            "query": "test_query",
-                            "fields": ["field_1"],
+                            "query": "non_fuzzy",
+                            "fields": "*",
+                            "type": "phrase",
+                            "lenient": True,
+                        }
+                    },
+                    {
+                        "multi_match": {
+                            "query": "fuzzy",
+                            "fields": [
+                                "closure_start_date",
+                                "end_date",
+                                "date_last_modified",
+                                "series_name",
+                                "consignment_reference",
+                            ],
+                            "type": "phrase",
+                            "lenient": True,
+                        }
+                    },
+                    {
+                        "multi_match": {
+                            "query": "fuzzy",
+                            "fields": [
+                                "file_name",
+                                "description",
+                                "foi_exemption_code",
+                                "content",
+                                "citeable_reference",
+                            ],
                             "fuzziness": "AUTO",
                             "lenient": True,
                         }
-                    }
+                    },
                 ],
+                "minimum_should_match": 1,
                 "filter": [
                     {
                         "term": {
-                            "transferring_body_id.keyword": transferring_body_id
+                            "transferring_body_id.keyword": "test_transferring_body_id"
                         }
                     }
                 ],
             }
         },
+        "sort": {"sort": "foobar"},
+        "_source": True,
         "highlight": {
             "pre_tags": ["<test_highlight_key>"],
             "post_tags": ["</test_highlight_key>"],
@@ -492,7 +531,7 @@ def test_build_search_transferring_body_query():
             "fragment_size": 200,
             "number_of_fragments": 5,
             "phrase_limit": 256,
-            "require_field_match": False,
+            "require_field_match": True,
             "boundary_scanner": "sentence",
             "boundary_scanner_locale": "en",
             "order": "score",

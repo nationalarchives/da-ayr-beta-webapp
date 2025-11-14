@@ -214,10 +214,10 @@ def setup_opensearch():
     return OpenSearch(
         hosts=current_app.config.get("OPEN_SEARCH_HOST"),
         http_auth=current_app.config.get("OPEN_SEARCH_HTTP_AUTH"),
+        connection_class=RequestsHttpConnection,
         use_ssl=current_app.config.get("OPEN_SEARCH_USE_SSL", True),
         verify_certs=verify_certs,
         ca_certs=ca_certs,
-        connection_class=RequestsHttpConnection,
     )
 
 
@@ -259,35 +259,66 @@ def get_all_fields_excluding(open_search, index_name, exclude_fields=None):
     return filtered_fields
 
 
-def build_must_clauses(search_fields, quoted_phrases, single_terms):
-    """Helper function to build must_clauses for OpenSearch with AND"""
-    must_clauses = []
+def build_should_clauses(search_fields, quoted_phrases, single_terms):
+    """Build should_clauses for OpenSearch with OR logic, separating non_fuzzy and fuzzy fields."""
 
+    def is_non_fuzzy_field(field):
+        # Define which fields should not use fuzziness (e.g., IDs, dates)
+        return (
+            field.startswith("consignment_ref")
+            or field.startswith("series")
+            or "date" in field
+        )
+
+    # Split fields into non-fuzzy and fuzzy based on their names
+    non_fuzzy_fields = [f for f in search_fields if is_non_fuzzy_field(f)]
+    fuzzy_fields = [f for f in search_fields if not is_non_fuzzy_field(f)]
+
+    should_clauses = []
+
+    # For each quoted phrase, add a multi_match phrase clause for all fields
     for phrase in quoted_phrases:
-        must_clauses.append(
-            {
-                "multi_match": {
-                    "query": phrase,
-                    "fields": search_fields,
-                    "type": "phrase",
-                    "lenient": True,
+        if non_fuzzy_fields:
+            should_clauses.append(
+                {
+                    "multi_match": {
+                        "query": phrase,
+                        "fields": "*",
+                        "type": "phrase",
+                        "lenient": True,
+                    }
                 }
-            }
-        )
+            )
 
+    # For each single term, add a multi_match clause for non-fuzzy and fuzzy fields
     for term in single_terms:
-        must_clauses.append(
-            {
-                "multi_match": {
-                    "query": term,
-                    "fields": search_fields,
-                    "fuzziness": "AUTO",
-                    "lenient": True,
+        if non_fuzzy_fields:
+            # if there are non-fuzzy fields, add a phrase match for them
+            should_clauses.append(
+                {
+                    "multi_match": {
+                        "query": term,
+                        "fields": non_fuzzy_fields,
+                        "type": "phrase",
+                        "lenient": True,
+                    }
                 }
-            }
-        )
+            )
 
-    return must_clauses
+        if fuzzy_fields:
+            # if there are fuzzy fields, add a fuzzy match for them
+            should_clauses.append(
+                {
+                    "multi_match": {
+                        "query": term,
+                        "fields": fuzzy_fields,
+                        "fuzziness": "AUTO",
+                        "lenient": True,
+                    }
+                }
+            )
+
+    return should_clauses
 
 
 def build_dsl_search_query(
@@ -298,20 +329,23 @@ def build_dsl_search_query(
     sorting,
 ):
     """Constructs the base DSL query for OpenSearch with AND"""
-    must_clauses = build_must_clauses(
+    should_clauses = build_should_clauses(
         search_fields, quoted_phrases, single_terms
     )
 
-    return {
+    query_structure = {
         "query": {
             "bool": {
-                "must": must_clauses,
-                "filter": filter_clauses,
+                "should": should_clauses,
+                "minimum_should_match": 1,  # Require at least one should clause to match
+                "filter": filter_clauses,  # Keep transferring_body_id as non-scoring filter
             }
         },
         "sort": sorting,
         "_source": True,
     }
+
+    return query_structure
 
 
 def build_search_results_summary_query(
@@ -372,7 +406,7 @@ def build_search_transferring_body_query(
             "fragment_size": 200,  # limit amount of text
             "number_of_fragments": 5,  # default
             "phrase_limit": 256,  # default
-            "require_field_match": False,  # default, highlights only in fields that were searched
+            "require_field_match": True,  # default, highlights only in fields that were searched
             "boundary_scanner": "sentence",
             "boundary_scanner_locale": "en",
             "order": "score",

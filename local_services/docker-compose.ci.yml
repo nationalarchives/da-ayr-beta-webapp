@@ -102,7 +102,7 @@ services:
       "
 
   postgres:
-    image: postgres@sha256:41fc5342eefba6cc2ccda736aaf034bbbb7c3df0fdb81516eba1ba33f360162c # postgres:18.0 with digest for immutability
+    image: postgres@sha256:28bda6d50590658221007b10573830c941b483e9d1a5bc2713a3f60477df8389 # postgres:18.0 with digest for immutability
     env_file:
       - .docker.env
     volumes:
@@ -117,7 +117,7 @@ services:
       - keycloak_network
 
   webapp_postgres:
-    image: postgres@sha256:41fc5342eefba6cc2ccda736aaf034bbbb7c3df0fdb81516eba1ba33f360162c # postgres:18.0 with digest for immutability
+    image: postgres@sha256:28bda6d50590658221007b10573830c941b483e9d1a5bc2713a3f60477df8389 # postgres:18.0 with digest for immutability
     env_file:
       - .docker.env
     user: postgres

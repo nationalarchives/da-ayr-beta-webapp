@@ -1,4 +1,4 @@
-FROM python:3.13-slim
+FROM python:3.11-slim
 
 WORKDIR /docker_app
 
@@ -8,6 +8,9 @@ RUN apt-get update && apt-get install -y \
     libpq-dev \
     openssl \
     curl \
+    tesseract-ocr \
+    antiword \
+    libreoffice \
     nodejs \
     npm \
     && rm -rf /var/lib/apt/lists/*
